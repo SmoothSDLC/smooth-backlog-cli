@@ -98,19 +98,30 @@ Each use case is one scenario: the situation, the command as typed, and what mus
 - T-NEW-2. A rule denies: exit 1 with the rule's text, no number used, nothing written.
 - *T-LIST-1. `backlog team list --team web` lists the team's items of the branch in priority order; with `--show-all` every team's.
 - *T-SHOW-1. `backlog team show 20 --team web` prints the item.
-- *T-UPD-1. `backlog team update 20 estimate 30 --team web --agent member-1`, `estimate` a field of the team definition and a rule allowing it: the field is set and the history names the agent.
-- *T-UPD-2. A rule naming `estimate` denies: exit 1 with its text, nothing changes.
+- *T-UPD-1. `backlog team update 20 estimate 30 --team web --agent member-1`, `estimate` a field of the team definition and no rule failing: the field is set and the history names the agent.
+- *T-UPD-2. A requirement fails: exit 1 with its message, nothing changes.
 - *T-UPD-3. A value outside the field's `values` list: exit 1.
-- T-UPD-4. On the branch today: `backlog team update 20 start --team web --agent member-1` takes the step `start` (kept until choice 1 of the specification is decided).
 - *T-UPD-5. With `--whatif` the answer is given and nothing changes.
 - *T-ARCH-1. `backlog team archive 20 --team web --agent lead-1` archives the item when a rule allows it; `backlog team archive done` archives every finished item the rules allow.
 - *T-IMP-1. `backlog team import feature-x` and `backlog team branch import feature-x` move the team's open items of that branch here when the rules allow.
 
+### The rules engine ([team-rules-spec.md](team-rules-spec.md)); examples from the `advanced` team of `teams.example.json`
+- *T-RULE-1. Every rule is evaluated on every change: `backlog team update 7 estimate 90` on a ready item fails rule `size` (at most 60) although the status does not change.
+- *T-RULE-2. Transition: `backlog team update 7 status closed` on an `active` item fails rule `flow` with "status does not move from active to closed".
+- *T-RULE-3. Several failures: a change that fails two requirements returns both messages, in JSON `{"refused": [...]}`, and with `--human` one line each.
+- *T-RULE-4. Derivation: `backlog team update 7 status active --agent member-2` on a ready item whose dependencies are closed sets `holder` to member-2; the history entry lists `status` and `holder`.
+- *T-RULE-5. Requirements see derivations: member-2 already holds an active item; the same change fails rule `one-each`, and nothing is written, `holder` included.
+- *T-RULE-6. Named condition: an item with a dependency not closed fails rule `ready-to-start` with "item 7 waits for the items it depends on".
+- *T-RULE-7. Permission: `backlog team update 7 status closed --agent member-1` when member-1 is not the checker fails rule `checker-closes`.
+- *T-RULE-8. No rule is named by a caller: there is no command or flag that takes a rule id or a step.
+- *T-RULE-9. Validation finds: a rule reading an undeclared field; a value of `to` not in the field's `values`; two derivations setting `holder` to different literals on the same trigger; a cycle of derivations; a cycle of named conditions; a message reading an unknown value. Each is reported with the team, the rule's id or place, the reason and the fix, and the whole team file is invalid.
+- *T-RULE-10. With `--whatif` a change is evaluated, derivations shown, and nothing written.
+
 ### `backlog team pop`, `query`, `validate`, `migrate`
-- T-POP-1. `backlog team pop --team web --agent member-1` takes the first entry of the pop table the rules allow and prints the item.
+- *T-POP-1. `backlog team pop --team web --agent member-1`: for the first queue entry of the member's roles that has a matching item, the first such item in priority order is offered; with `take`, the item is changed with those values and every rule applies; a refused item is skipped for the next.
 - T-POP-2. Nothing allowed: idle, exit 3.
 - *T-POP-3. With `--whatif` the offer is printed and nothing taken.
-- T-QRY-1. `backlog team query filter <name>` applies a filter; `query check <item> <step>` says allowed or refused without acting; `query plan` lists what pop would offer each person; `query rules` and `query steps` print the rule set and its step words.
+- *T-QRY-1. `backlog team list --filter waiting` lists the items the filter matches; `backlog team query plan` lists what the queue offers each person; `backlog team query rules` prints the rule set. `backlog team query check`, `query steps` and `query filter`: exit 2, no such command.
 - T-VAL-1. `backlog team validate` exits 0 on a valid team file; on a broken rule it reports where, which rule, why and the fix.
 - *T-VAL-2. The packaged default team and the three teams of `teams.example.json` pass `backlog team validate` and `backlog validate`.
 - T-MIG-1. `backlog team migrate` converts markdown items to JSON items, reports every missing or invalid field, records the migration; `--ask` repairs one field at a time.

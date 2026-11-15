@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SmoothSDLC/smooth-backlog-cli/team-rules.schema.json",
+  "title": "Rule set of a team",
+  "description": "The rules of one team, as specified in team-rules-spec.md. Every rule is evaluated on every change a team command makes.",
+  "type": "object",
+  "required": [
+    "rules"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "The team's way of working in words."
+    },
+    "conditions": {
+      "type": "object",
+      "description": "Named conditions, used by rules with {\"condition\": name}.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/condition"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "queue": {
+      "type": "array",
+      "description": "What backlog team pop offers or takes, in order.",
+      "items": {
+        "type": "object",
+        "required": [
+          "match"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "match": {
+            "$ref": "#/$defs/condition"
+          },
+          "take": {
+            "$ref": "#/$defs/assignments"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "match"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "match": {
+            "$ref": "#/$defs/condition"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "on": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "commands": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "new",
+                  "update",
+                  "archive",
+                  "move"
+                ]
+              }
+            },
+            "changes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            },
+            "from": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "to": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        },
+        "require": {
+          "$ref": "#/$defs/condition"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "set": {
+          "$ref": "#/$defs/assignments"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "require",
+            "message"
+          ],
+          "not": {
+            "required": [
+              "set"
+            ]
+          }
+        },
+        {
+          "required": [
+            "set"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "require"
+                ]
+              },
+              {
+                "required": [
+                  "message"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "assignments": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/value"
+      }
+    },
+    "condition": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "all": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "any": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "not": {
+          "$ref": "#/$defs/condition"
+        },
+        "is": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "in": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "contains": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        ">=": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "<=": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        ">": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "<": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "regex": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "empty": {
+          "$ref": "#/$defs/value"
+        },
+        "every": {
+          "type": "object",
+          "required": [
+            "items",
+            "match"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "$ref": "#/$defs/value"
+            },
+            "match": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        },
+        "some": {
+          "type": "object",
+          "required": [
+            "items",
+            "match"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "$ref": "#/$defs/value"
+            },
+            "match": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "properties": {
+            "count": {
+              "type": "object",
+              "required": [
+                "items",
+                "match"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/value"
+                },
+                "match": {
+                  "$ref": "#/$defs/condition"
+                }
+              }
+            },
+            "length": {
+              "$ref": "#/$defs/value"
+            },
+            "plus": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            },
+            "age": {
+              "$ref": "#/$defs/value"
+            },
+            "roles_of": {
+              "$ref": "#/$defs/value"
+            },
+            "text": {
+              "type": "string"
+            },
+            "$item": {
+              "$ref": "#/$defs/value"
+            },
+            "$items": {
+              "$ref": "#/$defs/value"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

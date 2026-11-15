@@ -10,7 +10,7 @@ This is the whole of the work left. Each task names the use cases of [use-cases.
 
 | # | Task | Use cases | Spec | Main files |
 |---|---|---|---|---|
-| 0 | Complete the specification: describe every row of its section 8, and apply the owner's answers to its section 7 | none | 7, 8 | `behaviour-spec.md`, `use-cases.md` |
+| 0 | Complete the specification: describe every row of its section 8, apply the owner's answers to its section 7 and to the team rules specification | none | 7, 8 | `behaviour-spec.md`, `team-rules-spec.md`, `use-cases.md` |
 | 1 | The flat base item: no `fields` object; `cli_version` and `history` required; the history key `command`; `name` and `body` become `title` and `description` in items, index and code | G-ITEM-1, U-LIST-4 | 3.1, 3.5, 4.4 | `src/shared/item-json.js`, `src/shared/index.js`, `src/team/migrate-convert.js` |
 | 2 | The definition that applies: the team's, else `item_definition`, else the packaged one; the fixed field list in the code goes | U-NEW-2, U-NEW-3 | 3.2, 3.7, 4.3 | `src/shared/item-definition.js` |
 | 3 | `backlog new`: `--title` and `--description`, or `--file`; `--ask`; `--whatif`; fields at their defaults; at the bottom of the priority; other flags refused | U-NEW-1 to U-NEW-10 | 4.2, 5.1 | `src/shared/new.js` |
@@ -19,17 +19,18 @@ This is the whole of the work left. Each task names the use cases of [use-cases.
 | 6 | The configuration: the five variable keys, `archive_folder`, `item_definition`, `redact_pii` and `redaction_patterns`; the file checked against its schema; inputs read through the named variables; the backlog location must be a git repository; redaction | U-NEW-9, U-SYNC-4, U-RED-1, T-IN-1 to T-IN-5 | 3.4, 4.1, 4.7, 4.9 | `src/shared/store.js`, `src/team/inputs.js`, `src/shared/safety.js` |
 | 7 | `backlog setup`: configuration, skill in every agent folder, example team file and defaults, version check; `backlog upgrade` converts the items | U-SETUP-1 to U-SETUP-7, U-UPG-1, U-UPG-2 | 4.11, 4.12 | `src/shared/setup.js`, `src/integrations.js`, `src/upgrade.js` |
 | 8 | `backlog validate` and `backlog team validate`: schemas against JSON Schema, the whole team file, the user definition, every item against its definition and its team's rules | U-VAL-1 to U-VAL-5, T-VAL-1, T-VAL-2 | 4.5 | `src/team/validate-command.js`, `src/team/rules/validate*.js` |
-| 9 | The team forms of the user commands; JSON by default and `--human`; `--whatif` on every team command; the form of `backlog team update` decided by the owner (spec section 7, choice 1) | T-OUT-1, T-NEW-1, T-NEW-2, T-LIST-1, T-SHOW-1, T-UPD-1 to T-UPD-5, T-ARCH-1, T-IMP-1, T-POP-1 to T-POP-3, T-QRY-1, T-MIG-1, T-MIG-2 | 4.6, 4.8, 5.2 | `src/team/` |
+| 9a | The rules engine of [team-rules-spec.md](2026-11-14-definition-driven-cli/team-rules-spec.md): changes, triggers, derivations in dependency order, every requirement evaluated, all failures returned, named conditions, queue and filters, validation of the rules (sections 2 to 11); the step evaluator, the ordered table and the effects go | T-RULE-1 to T-RULE-10 | team rules spec | `src/team/rules/` |
+| 9b | The team forms of the user commands on that engine; JSON by default and `--human`; `--whatif` on every team command; `backlog team update <item> <property> <value>`; `backlog team list --filter`; `query plan` and `query rules` | T-OUT-1, T-NEW-1, T-NEW-2, T-LIST-1, T-SHOW-1, T-UPD-1 to T-UPD-5, T-ARCH-1, T-IMP-1, T-POP-1 to T-POP-3, T-QRY-1, T-MIG-1, T-MIG-2 | 4.6, 4.8, 5.2 | `src/team/` |
 | 10 | `backlog` alone prints the help; `--whatif` replaces `--dry-run`; the removed commands and flags go | U-HELP-1, U-HELP-2 | 5.3 | `src/main.js`, `src/help.js`, `src/team/cli.js` |
 | 11 | The coded workflow leaves the code: `src/team/lifecycle.js`, `queue.js`, `team.js`, `workflow.js`, `wip.js`, `views.js`, `handoff.js`, `handoff-commands.js`, `src/shared/dependencies.js`, `wip-limits.js`, the status words of `status.js`, `SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS`, `SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD`, `templates/workflows/team.json` (to the archive); a guard test | G-CODE-1, G-CODE-2 | 1 | the files named |
-| 12 | `teams.example.json` with the three teams, the packaged defaults, the examples guide (each team's way of working in words, then its rules), every template valid; the owner's team file with the actual Cody rules and item definition written to the topology repository | T-VAL-2, G-TOPO-1 | 3.6, 3.7, 6 | `templates/`, a `docs/` folder; the topology repository |
+| 12 | `teams.example.json` with the three teams (written in the new rule form; the five old templates of `templates/teams/` are moved to the archive), the packaged defaults, the examples guide (each team's way of working in words, then its rules), every template valid; the owner's team file with the actual Cody rules and item definition written to the topology repository | T-VAL-2, G-TOPO-1 | 3.6, 3.7, 6 | `templates/`, a `docs/` folder; the topology repository |
 | 13 | `README.md`, `COMMANDS.md`, `CHANGELOG.md`, `AGENTS.md` and the skill rewritten from the new help; a test compares them with the help | G-DOC-1 | 5 | the files named |
 | 14 | The scenarios: every use case a scenario in `features/`; each earlier feature file and test rewritten or moved to the archive as the file audit says | all | all | `features/`, `.agents/test/` |
 | 15 | Proof and review: full suite with no failure and no skip, `npm run check`, the private guard, both storage places; branch-wide code review and ponytail review; the gaps fixed | U-SYNC-1 to U-SYNC-3, U-LIST-1, U-LIST-3, U-LIST-5, U-LIST-6, U-SHOW-2, U-SHOW-3 | all | the whole branch |
 
 Use cases without `*` describe behaviour the branch has today and every task keeps them.
 
-Waiting for the owner (section 7 of the specification): whether rules are chosen by a step or by command and property (changes tasks 9, 11, 12 and the rule format); the turn-taking of two processes in one local copy; what happens to a value whose field the definition that applies does not declare; whether `backlog archive` takes `--show-all`; the variable `SMOOTH_BACKLOG_CLI_RUN_HOOK`; whether `backlog team migrate` goes into `backlog upgrade`; and the other lead choices of section 7.
+Waiting for the owner (section 7 of the specification), now that the step question is decided (decisions 53 to 56): the approval of the team rules specification; the turn-taking of two processes in one local copy; what happens to a value whose field the definition that applies does not declare; whether `backlog archive` takes `--show-all`; the variable `SMOOTH_BACKLOG_CLI_RUN_HOOK`; whether `backlog team migrate` goes into `backlog upgrade`; and the other lead choices of section 7.
 
 ## Decisions
 
@@ -37,7 +38,7 @@ The decisions in force are in [decisions.md](2026-11-14-definition-driven-cli/de
 
 ## What on this branch still describes or implements the earlier behaviour
 
-Every tracked file outside `.backlog/archived/` has one row and one state in [file-audit.tsv](2026-11-14-definition-driven-cli/file-audit.tsv): AUDIT-BLOCKED 5, CODE 79, KEEP 16, MOVE-WITH-CODE 1, NEW-BEHAVIOUR 17, REWRITE 10, TEST-OF-EARLIER 146, 274 in all. No file of this repository, on any branch, is an HTML page.
+Every tracked file outside `.backlog/archived/` has one row and one state in [file-audit.tsv](2026-11-14-definition-driven-cli/file-audit.tsv): CODE 79, KEEP 16, MOVE-WITH-CODE 1, NEW-BEHAVIOUR 19, REPLACE 5, REWRITE 10, TEST-OF-EARLIER 146, 276 in all. No file of this repository, on any branch, is an HTML page.
 
 Counted on 2026-11-14 from the tracked files outside `.backlog/archived/`. Moved to the archive so far: the 147 earlier documents of `.agents/docs`, the two review files and one test. Not yet brought in line:
 

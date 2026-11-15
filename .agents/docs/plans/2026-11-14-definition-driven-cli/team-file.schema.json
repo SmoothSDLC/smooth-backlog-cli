@@ -32,7 +32,12 @@
           "$ref": "#/$defs/itemDefinition"
         },
         "rules": {
-          "$ref": "#/$defs/ruleSet"
+          "$ref": "team-rules.schema.json",
+          "description": "The team's rule set; its form is team-rules.schema.json and its meaning team-rules-spec.md."
+        },
+        "description": {
+          "type": "string",
+          "description": "The team's way of working in words."
         }
       }
     },
@@ -96,131 +101,6 @@
           "type": "string"
         }
       }
-    },
-    "ruleSet": {
-      "type": "object",
-      "required": [
-        "table"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "table": {
-          "type": "array",
-          "description": "The rules in order; for a step, the first rule whose condition holds decides.",
-          "items": {
-            "$ref": "#/$defs/rule"
-          }
-        },
-        "pop": {
-          "type": "array",
-          "description": "The steps backlog team pop tries, in order.",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "step"
-            ],
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "step": {
-                "type": "string"
-              },
-              "when": {
-                "type": "object"
-              }
-            }
-          }
-        },
-        "filters": {
-          "type": "object",
-          "description": "Named readings of the team's items.",
-          "additionalProperties": {
-            "type": "object",
-            "required": [
-              "when"
-            ],
-            "additionalProperties": false,
-            "properties": {
-              "description": {
-                "type": "string"
-              },
-              "when": {
-                "type": "object"
-              }
-            }
-          }
-        }
-      }
-    },
-    "rule": {
-      "type": "object",
-      "required": [
-        "id",
-        "step"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "step": {
-          "description": "The step word, a list of step words, or * for every step.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "minItems": 1
-            }
-          ]
-        },
-        "when": {
-          "type": "object",
-          "description": "A condition: all, any, not, is, in, empty, >=, <=, regex, contains, every, some."
-        },
-        "deny": {
-          "type": "string",
-          "description": "The text of the refusal."
-        },
-        "do": {
-          "type": "object",
-          "description": "The effects: set, add, remove, note, related, place, archive, delete, branch, team, say.",
-          "propertyNames": {
-            "enum": [
-              "set",
-              "add",
-              "remove",
-              "note",
-              "related",
-              "place",
-              "archive",
-              "delete",
-              "branch",
-              "team",
-              "say"
-            ]
-          }
-        }
-      },
-      "oneOf": [
-        {
-          "required": [
-            "deny"
-          ]
-        },
-        {
-          "required": [
-            "do"
-          ]
-        }
-      ]
     }
   }
 }

@@ -1,5 +1,6 @@
 {
   "simple": {
+    "description": "One agent works through the queue one item at a time. An item is small (at most 120 minutes), is started, then finished with a written result.",
     "people": {
       "agent-1": [
         "worker"
@@ -31,50 +32,99 @@
       }
     },
     "rules": {
-      "table": [
+      "description": "Only the team's agent changes items. A new item needs an estimate of at most 120 minutes. Status moves todo to doing to done. One item is doing at a time. Done needs a result.",
+      "rules": [
         {
-          "id": "members-only",
-          "step": "*",
-          "when": {
-            "empty": "$caller.roles"
-          },
-          "deny": "{$caller} is not a person of team {$team.name}"
-        },
-        {
-          "id": "new-needs-estimate",
-          "step": "new",
-          "when": {
-            "empty": "$arg.estimate"
-          },
-          "deny": "a new item needs --estimate <minutes>"
-        },
-        {
-          "id": "new-size-cap",
-          "step": "new",
-          "when": {
+          "id": 1,
+          "description": "only people of the team",
+          "require": {
             "not": {
-              "<=": [
-                "$arg.estimate",
-                120
+              "empty": "$caller.roles"
+            }
+          },
+          "message": "{$caller} is not a person of team {$team.name}"
+        },
+        {
+          "id": 2,
+          "on": {
+            "commands": [
+              "new"
+            ]
+          },
+          "require": {
+            "all": [
+              {
+                ">": [
+                  "$after.estimate",
+                  0
+                ]
+              },
+              {
+                "<=": [
+                  "$after.estimate",
+                  120
+                ]
+              }
+            ]
+          },
+          "message": "a new item needs --estimate between 1 and 120 minutes (got {$after.estimate}); split larger work"
+        },
+        {
+          "id": 3,
+          "on": {
+            "changes": [
+              "status"
+            ]
+          },
+          "require": {
+            "any": [
+              {
+                "all": [
+                  {
+                    "is": [
+                      "$before.status",
+                      "todo"
+                    ]
+                  },
+                  {
+                    "is": [
+                      "$after.status",
+                      "doing"
+                    ]
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "is": [
+                      "$before.status",
+                      "doing"
+                    ]
+                  },
+                  {
+                    "is": [
+                      "$after.status",
+                      "done"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "message": "status moves todo to doing to done, not {$before.status} to {$after.status}"
+        },
+        {
+          "id": 4,
+          "on": {
+            "to": {
+              "status": [
+                "doing"
               ]
             }
           },
-          "deny": "an item is at most 120 minutes of work (got {$arg.estimate}); split it"
-        },
-        {
-          "id": "new",
-          "step": "new",
-          "do": {
-            "set": {
-              "estimate": "$arg.estimate"
-            }
-          }
-        },
-        {
-          "id": "start-one-at-a-time",
-          "step": "start",
-          "when": {
-            ">=": [
+          "require": {
+            "<=": [
               {
                 "count": {
                   "items": "$team.items",
@@ -89,74 +139,60 @@
               1
             ]
           },
-          "deny": "finish the item in progress first"
+          "message": "finish the item in progress first"
         },
         {
-          "id": "start",
-          "step": "start",
-          "when": {
-            "is": [
-              "$item.status",
-              "todo"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "doing"
+          "id": 5,
+          "on": {
+            "to": {
+              "status": [
+                "done"
+              ]
             }
-          }
-        },
-        {
-          "id": "finish-needs-result",
-          "step": "finish",
-          "when": {
-            "empty": "$arg.result"
           },
-          "deny": "finish needs --result \"<what was delivered>\""
+          "require": {
+            "not": {
+              "empty": "$after.result"
+            }
+          },
+          "message": "done needs a result: backlog team update {$after.seq} result \"<what was delivered>\""
         },
         {
-          "id": "finish",
-          "step": "finish",
-          "when": {
-            "is": [
-              "$item.status",
-              "doing"
+          "id": 6,
+          "on": {
+            "commands": [
+              "archive"
             ]
           },
-          "do": {
-            "set": {
-              "status": "done",
-              "result": "$arg.result"
-            },
-            "place": "last"
-          }
-        },
-        {
-          "id": "archive",
-          "step": "archive",
-          "when": {
+          "require": {
             "is": [
-              "$item.status",
+              "$after.status",
               "done"
             ]
           },
-          "do": {
-            "archive": true
-          }
+          "message": "only a done item is archived"
         }
       ],
-      "pop": [
+      "queue": [
         {
-          "id": "next-item",
-          "step": "start"
+          "description": "the next item to start",
+          "match": {
+            "is": [
+              "$it.status",
+              "todo"
+            ]
+          },
+          "take": {
+            "status": "doing"
+          }
         }
       ],
       "filters": {
         "doing": {
           "description": "The item in progress.",
-          "when": {
+          "match": {
             "is": [
-              "$item.status",
+              "$it.status",
               "doing"
             ]
           }
@@ -165,6 +201,7 @@
     }
   },
   "advanced": {
+    "description": "A lead and three members. The lead splits large work into items of at most 60 minutes. A member takes a ready item whose dependencies are closed, works on it, and another member checks it before it closes.",
     "people": {
       "lead-1": [
         "lead"
@@ -185,11 +222,9 @@
         "default": "new",
         "values": [
           "new",
-          "splitting",
           "ready",
-          "in progress",
+          "active",
           "checking",
-          "passed",
           "closed"
         ],
         "final": [
@@ -200,7 +235,7 @@
       "estimate": {
         "type": "number",
         "default": 0,
-        "description": "Minutes of work, review included."
+        "description": "Minutes of work, check included."
       },
       "holder": {
         "type": "person",
@@ -217,258 +252,152 @@
         "default": null,
         "description": "The item this one was split from."
       },
-      "children": {
-        "type": "items",
-        "default": [],
-        "description": "The items split from this one; filled by the step that creates a child."
-      },
       "depends_on": {
         "type": "items",
         "default": [],
-        "description": "Items that must be closed before this one is claimed."
+        "description": "Items that must be closed before this one becomes active."
       },
-      "handoff": {
+      "result": {
         "type": "text",
         "default": "",
-        "description": "The hand-off note of the stage that ended last; emptied when the next stage ends."
-      },
-      "rounds": {
-        "type": "number",
-        "default": 0,
-        "description": "How many checks rejected the work."
+        "description": "What was delivered."
       }
     },
     "rules": {
-      "table": [
-        {
-          "id": "members-only",
-          "step": "*",
-          "when": {
-            "empty": "$caller.roles"
-          },
-          "deny": "{$caller} is not a person of team {$team.name}"
-        },
-        {
-          "id": "new-needs-estimate",
-          "step": "new",
-          "when": {
-            "empty": "$arg.estimate"
-          },
-          "deny": "a new item needs --estimate <minutes>"
-        },
-        {
-          "id": "new-size-cap",
-          "step": "new",
-          "when": {
-            "not": {
-              "<=": [
-                "$arg.estimate",
-                60
-              ]
-            }
-          },
-          "deny": "an item is at most 60 minutes of work (got {$arg.estimate}); split it"
-        },
-        {
-          "id": "new-child-parent-splitting",
-          "step": "new",
-          "when": {
-            "all": [
-              {
-                "not": {
-                  "empty": "$arg.parent"
-                }
-              },
-              {
-                "not": {
-                  "every": {
-                    "items": "$arg.parent",
-                    "match": {
-                      "is": [
-                        "$it.status",
-                        "splitting"
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "deny": "children are added only to an item in status splitting (item {$arg.parent})"
-        },
-        {
-          "id": "new-child",
-          "step": "new",
-          "when": {
-            "not": {
-              "empty": "$arg.parent"
-            }
-          },
-          "do": {
-            "set": {
-              "status": "ready",
-              "estimate": "$arg.estimate",
-              "parent": "$arg.parent",
-              "depends_on": "$arg.after"
+      "description": "Only people of the team change items; only the lead creates and readies them. Items are at most 60 minutes. Status moves new, ready, active, checking, closed, and checking may go back to active. Becoming active makes the caller the holder and needs every dependency closed; a member holds one active item. Checking needs a result and a checker who is not the holder. Only the checker closes.",
+      "conditions": {
+        "dependencies-closed": {
+          "every": {
+            "items": {
+              "$items": "$after.depends_on"
             },
-            "related": [
-              {
-                "items": "$arg.parent",
-                "add": {
-                  "children": "$item.seq"
-                }
-              }
-            ],
-            "place": {
-              "before": "$arg.parent"
-            }
-          }
-        },
-        {
-          "id": "new",
-          "step": "new",
-          "do": {
-            "set": {
-              "estimate": "$arg.estimate"
-            }
-          }
-        },
-        {
-          "id": "split-lead-only",
-          "step": [
-            "split-start",
-            "split-done"
-          ],
-          "when": {
-            "not": {
-              "in": [
-                "lead",
-                "$caller.roles"
+            "match": {
+              "is": [
+                "$it.status",
+                "closed"
               ]
             }
+          }
+        }
+      },
+      "rules": [
+        {
+          "id": "members",
+          "require": {
+            "not": {
+              "empty": "$caller.roles"
+            }
           },
-          "deny": "only the lead splits an item"
+          "message": "{$caller} is not a person of team {$team.name}"
         },
         {
-          "id": "split-start",
-          "step": "split-start",
-          "when": {
-            "is": [
-              "$item.status",
+          "id": "lead-creates",
+          "on": {
+            "commands": [
               "new"
             ]
           },
-          "do": {
-            "set": {
-              "status": "splitting"
-            }
-          }
-        },
-        {
-          "id": "split-done-needs-children",
-          "step": "split-done",
-          "when": {
-            "empty": "$item.children"
-          },
-          "deny": "item {$item.seq} has no child yet; add one with backlog team new --parent {$item.seq}"
-        },
-        {
-          "id": "split-done",
-          "step": "split-done",
-          "when": {
-            "is": [
-              "$item.status",
-              "splitting"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "ready"
-            }
-          }
-        },
-        {
-          "id": "wait-for-children",
-          "step": [
-            "claim",
-            "close",
-            "abandon"
-          ],
-          "when": {
-            "some": {
-              "items": "$item.children",
-              "match": {
-                "not": {
-                  "is": [
-                    "$it.status",
-                    "closed"
-                  ]
-                }
-              }
-            }
-          },
-          "deny": "item {$item.seq} waits for its children ({$item.children}) to close"
-        },
-        {
-          "id": "claim-not-ready",
-          "step": "claim",
-          "when": {
-            "not": {
-              "is": [
-                "$item.status",
-                "ready"
-              ]
-            }
-          },
-          "deny": "only a ready item is claimed (item {$item.seq} is {$item.status})"
-        },
-        {
-          "id": "claim-dependencies",
-          "step": [
-            "claim",
-            "close"
-          ],
-          "when": {
-            "some": {
-              "items": "$item.depends_on",
-              "match": {
-                "not": {
-                  "any": [
-                    {
-                      "is": [
-                        "$it.status",
-                        "closed"
-                      ]
-                    },
-                    {
-                      "is": [
-                        "$it.archived",
-                        true
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "deny": "item {$item.seq} waits for its dependencies ({$item.depends_on}) to close"
-        },
-        {
-          "id": "claim-lead",
-          "step": "claim",
-          "when": {
+          "require": {
             "in": [
               "lead",
               "$caller.roles"
             ]
           },
-          "deny": "the lead does not claim work; a member does"
+          "message": "only a lead creates items"
         },
         {
-          "id": "claim-limit-person",
-          "step": "claim",
-          "when": {
-            ">=": [
+          "id": "size",
+          "require": {
+            "<=": [
+              "$after.estimate",
+              60
+            ]
+          },
+          "message": "an item is at most 60 minutes (got {$after.estimate}); split it into children with parent {$after.seq}"
+        },
+        {
+          "id": "flow",
+          "on": {
+            "changes": [
+              "status"
+            ]
+          },
+          "require": {
+            "in": [
+              {
+                "text": "{$before.status}>{$after.status}"
+              },
+              [
+                "new>ready",
+                "ready>active",
+                "active>checking",
+                "checking>active",
+                "checking>closed"
+              ]
+            ]
+          },
+          "message": "status does not move from {$before.status} to {$after.status}"
+        },
+        {
+          "id": "lead-readies",
+          "on": {
+            "to": {
+              "status": [
+                "ready"
+              ]
+            }
+          },
+          "require": {
+            "in": [
+              "lead",
+              "$caller.roles"
+            ]
+          },
+          "message": "only a lead marks an item ready"
+        },
+        {
+          "id": "take",
+          "on": {
+            "to": {
+              "status": [
+                "active"
+              ]
+            },
+            "from": {
+              "status": [
+                "ready"
+              ]
+            }
+          },
+          "set": {
+            "holder": "$caller"
+          }
+        },
+        {
+          "id": "ready-to-start",
+          "on": {
+            "to": {
+              "status": [
+                "active"
+              ]
+            }
+          },
+          "require": {
+            "condition": "dependencies-closed"
+          },
+          "message": "item {$after.seq} waits for the items it depends on"
+        },
+        {
+          "id": "one-each",
+          "on": {
+            "to": {
+              "status": [
+                "active"
+              ]
+            }
+          },
+          "require": {
+            "<=": [
               {
                 "count": {
                   "items": "$team.items",
@@ -476,14 +405,14 @@
                     "all": [
                       {
                         "is": [
-                          "$it.holder",
-                          "$caller"
+                          "$it.status",
+                          "active"
                         ]
                       },
                       {
                         "is": [
-                          "$it.status",
-                          "in progress"
+                          "$it.holder",
+                          "$caller"
                         ]
                       }
                     ]
@@ -493,460 +422,155 @@
               1
             ]
           },
-          "deny": "{$caller} already works on an item; finish or release it first"
+          "message": "{$caller} already holds an active item"
         },
         {
-          "id": "claim-limit-team",
-          "step": "claim",
-          "when": {
-            ">=": [
+          "id": "check-needs",
+          "on": {
+            "to": {
+              "status": [
+                "checking"
+              ]
+            }
+          },
+          "require": {
+            "all": [
               {
-                "count": {
-                  "items": "$team.items",
-                  "match": {
-                    "is": [
-                      "$it.status",
-                      "in progress"
-                    ]
-                  }
+                "not": {
+                  "empty": "$after.result"
                 }
               },
-              3
-            ]
-          },
-          "deny": "the team already has 3 items in progress"
-        },
-        {
-          "id": "claim",
-          "step": "claim",
-          "do": {
-            "set": {
-              "status": "in progress",
-              "holder": "$caller"
-            }
-          }
-        },
-        {
-          "id": "release-who",
-          "step": "release",
-          "when": {
-            "not": {
-              "any": [
-                {
+              {
+                "not": {
+                  "empty": "$after.checker"
+                }
+              },
+              {
+                "not": {
                   "is": [
-                    "$caller",
-                    "$item.holder"
-                  ]
-                },
-                {
-                  "in": [
-                    "lead",
-                    "$caller.roles"
+                    "$after.checker",
+                    "$after.holder"
                   ]
                 }
+              }
+            ]
+          },
+          "message": "checking needs a result and a checker other than the holder"
+        },
+        {
+          "id": "checker-closes",
+          "on": {
+            "to": {
+              "status": [
+                "closed"
               ]
             }
           },
-          "deny": "only the holder ({$item.holder}) or the lead releases item {$item.seq}"
-        },
-        {
-          "id": "release",
-          "step": "release",
-          "when": {
-            "is": [
-              "$item.status",
-              "in progress"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "ready",
-              "holder": ""
-            },
-            "note": {
-              "heading": "Released",
-              "text": "$arg.note"
-            }
-          }
-        },
-        {
-          "id": "hand-to-check-holder",
-          "step": "hand-to-check",
-          "when": {
-            "not": {
-              "is": [
-                "$caller",
-                "$item.holder"
-              ]
-            }
-          },
-          "deny": "only the holder ({$item.holder}) hands item {$item.seq} to the check"
-        },
-        {
-          "id": "hand-to-check-note",
-          "step": "hand-to-check",
-          "when": {
-            "empty": "$arg.note"
-          },
-          "deny": "hand-to-check needs --note \"<what was done, why, and what the checker needs>\""
-        },
-        {
-          "id": "hand-to-check",
-          "step": "hand-to-check",
-          "when": {
-            "is": [
-              "$item.status",
-              "in progress"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "checking",
-              "handoff": "$arg.note",
-              "checker": ""
-            },
-            "note": {
-              "heading": "Hand-off",
-              "text": "$arg.note"
-            }
-          }
-        },
-        {
-          "id": "check-not-own",
-          "step": [
-            "start-check",
-            "check"
-          ],
-          "when": {
+          "require": {
             "is": [
               "$caller",
-              "$item.holder"
+              "$after.checker"
             ]
           },
-          "deny": "{$caller} cannot check its own work"
+          "message": "only the checker {$after.checker} closes item {$after.seq}"
         },
         {
-          "id": "start-check-handoff",
-          "step": "start-check",
-          "when": {
-            "empty": "$item.handoff"
+          "id": "archive-closed",
+          "on": {
+            "commands": [
+              "archive"
+            ]
           },
-          "deny": "item {$item.seq} has no hand-off note from the stage that ended; the holder writes it with hand-to-check --note"
-        },
+          "require": {
+            "is": [
+              "$after.status",
+              "closed"
+            ]
+          },
+          "message": "only a closed item is archived"
+        }
+      ],
+      "queue": [
         {
-          "id": "start-check",
-          "step": "start-check",
-          "when": {
+          "roles": [
+            "member"
+          ],
+          "description": "a member checks first, then takes ready work",
+          "match": {
             "all": [
               {
                 "is": [
-                  "$item.status",
+                  "$it.status",
                   "checking"
                 ]
               },
               {
-                "empty": "$item.checker"
+                "is": [
+                  "$it.checker",
+                  "$caller"
+                ]
               }
             ]
-          },
-          "do": {
-            "set": {
-              "checker": "$caller"
-            }
           }
         },
         {
-          "id": "check-who",
-          "step": "check",
-          "when": {
-            "not": {
-              "any": [
-                {
-                  "is": [
-                    "$caller",
-                    "$item.checker"
-                  ]
-                },
-                {
-                  "in": [
-                    "lead",
-                    "$caller.roles"
-                  ]
-                }
-              ]
-            }
-          },
-          "deny": "the checker of item {$item.seq} is {$item.checker}; start the check first"
-        },
-        {
-          "id": "check-verdict",
-          "step": "check",
-          "when": {
-            "not": {
-              "in": [
-                "$arg.verdict",
-                [
-                  "pass",
-                  "reject"
-                ]
-              ]
-            }
-          },
-          "deny": "check needs --verdict pass or --verdict reject"
-        },
-        {
-          "id": "check-comments",
-          "step": "check",
-          "when": {
-            "empty": "$arg.comments"
-          },
-          "deny": "check needs --comments \"<the findings>\""
-        },
-        {
-          "id": "check-round-cap",
-          "step": "check",
-          "when": {
+          "roles": [
+            "member"
+          ],
+          "match": {
             "all": [
               {
                 "is": [
-                  "$arg.verdict",
-                  "reject"
-                ]
-              },
-              {
-                ">=": [
-                  "$item.rounds",
-                  2
-                ]
-              },
-              {
-                "not": {
-                  "in": [
-                    "lead",
-                    "$caller.roles"
-                  ]
-                }
-              }
-            ]
-          },
-          "deny": "item {$item.seq} was rejected {$item.rounds} times; the lead records the next verdict"
-        },
-        {
-          "id": "check-reject",
-          "step": "check",
-          "when": {
-            "is": [
-              "$arg.verdict",
-              "reject"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "in progress",
-              "rounds": {
-                "plus": [
-                  "$item.rounds",
-                  1
-                ]
-              },
-              "handoff": "",
-              "checker": ""
-            },
-            "note": {
-              "heading": "Check rejected",
-              "text": "$arg.comments"
-            }
-          }
-        },
-        {
-          "id": "check-pass",
-          "step": "check",
-          "do": {
-            "set": {
-              "status": "passed",
-              "handoff": ""
-            },
-            "note": {
-              "heading": "Check passed",
-              "text": "$arg.comments"
-            }
-          }
-        },
-        {
-          "id": "close-holder",
-          "step": "close",
-          "when": {
-            "not": {
-              "is": [
-                "$caller",
-                "$item.holder"
-              ]
-            }
-          },
-          "deny": "only the holder ({$item.holder}) closes item {$item.seq}"
-        },
-        {
-          "id": "close",
-          "step": "close",
-          "when": {
-            "is": [
-              "$item.status",
-              "passed"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "closed"
-            },
-            "place": "last"
-          }
-        },
-        {
-          "id": "archive",
-          "step": "archive",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "closed"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "archive": true
-          }
-        },
-        {
-          "id": "adopt",
-          "step": "adopt",
-          "when": {
-            "all": [
-              {
-                "empty": "$item.team"
-              },
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "team": "$team.name",
-            "set": {
-              "status": "new"
-            }
-          }
-        },
-        {
-          "id": "abandon",
-          "step": "abandon",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.reason"
-                }
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "closed",
-              "holder": ""
-            },
-            "note": {
-              "heading": "Abandoned",
-              "text": "$arg.reason"
-            }
-          }
-        }
-      ],
-      "pop": [
-        {
-          "id": "lead-splits",
-          "step": "split-start",
-          "when": {
-            "in": [
-              "lead",
-              "$caller.roles"
-            ]
-          }
-        },
-        {
-          "id": "member-checks",
-          "step": "start-check"
-        },
-        {
-          "id": "member-claims",
-          "step": "claim"
-        }
-      ],
-      "filters": {
-        "waiting": {
-          "description": "Ready items that wait for a child or a dependency.",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$item.status",
+                  "$it.status",
                   "ready"
                 ]
               },
               {
-                "any": [
-                  {
-                    "some": {
-                      "items": "$item.children",
-                      "match": {
-                        "not": {
-                          "is": [
-                            "$it.status",
-                            "closed"
-                          ]
-                        }
-                      }
-                    }
+                "every": {
+                  "items": {
+                    "$items": "$it.depends_on"
                   },
-                  {
-                    "some": {
-                      "items": "$item.depends_on",
-                      "match": {
-                        "not": {
-                          "is": [
-                            "$it.status",
-                            "closed"
-                          ]
-                        }
-                      }
-                    }
+                  "match": {
+                    "is": [
+                      "$it.status",
+                      "closed"
+                    ]
                   }
-                ]
+                }
               }
             ]
+          },
+          "take": {
+            "status": "active"
           }
-        },
-        "in-progress": {
-          "description": "Items a member works on.",
-          "when": {
-            "is": [
-              "$item.status",
-              "in progress"
+        }
+      ],
+      "filters": {
+        "waiting": {
+          "description": "Ready items that wait for a dependency.",
+          "match": {
+            "all": [
+              {
+                "is": [
+                  "$it.status",
+                  "ready"
+                ]
+              },
+              {
+                "some": {
+                  "items": {
+                    "$items": "$it.depends_on"
+                  },
+                  "match": {
+                    "not": {
+                      "is": [
+                        "$it.status",
+                        "closed"
+                      ]
+                    }
+                  }
+                }
+              }
             ]
           }
         }
@@ -954,6 +578,7 @@
     }
   },
   "lead-and-reviewers": {
+    "description": "A lead plans and splits work; members implement; every item passes a review by a reviewer and then a second review by an outside reviewer before the lead closes it. A member can hand an item over to another member, and an item can wait for a decision of the lead.",
     "people": {
       "lead-1": [
         "lead"
@@ -964,11 +589,11 @@
       "member-2": [
         "member"
       ],
+      "reviewer-1": [
+        "reviewer"
+      ],
       "outside-1": [
         "outside-reviewer"
-      ],
-      "outside-2": [
-        "second-outside-reviewer"
       ]
     },
     "item": {
@@ -977,30 +602,17 @@
         "default": "new",
         "values": [
           "new",
-          "refining",
           "ready",
-          "in progress",
+          "active",
+          "review",
+          "second-review",
           "waiting",
-          "deciding",
-          "peer review",
-          "outside review",
-          "review complete",
           "closed"
         ],
         "final": [
           "closed"
         ],
         "description": "Where the item is."
-      },
-      "holder": {
-        "type": "person",
-        "default": "",
-        "description": "Who works on the item."
-      },
-      "reviewer": {
-        "type": "person",
-        "default": "",
-        "description": "Who reviews the current stage."
       },
       "estimate": {
         "type": "number",
@@ -1010,1198 +622,448 @@
       "done_when": {
         "type": "text",
         "default": "",
-        "description": "The definition of done."
+        "description": "What must be true for the item to be finished."
       },
-      "parent": {
-        "type": "item",
-        "default": null,
-        "description": "The item this one was split from."
+      "holder": {
+        "type": "person",
+        "default": "",
+        "description": "The member working on the item."
       },
-      "depends_on": {
-        "type": "items",
-        "default": [],
-        "description": "Items whose output this one needs."
+      "reviewer": {
+        "type": "person",
+        "default": "",
+        "description": "Who reviews the item now."
       },
-      "handoff_to": {
-        "type": "items",
-        "default": [],
-        "description": "Dependents this item recorded a hand-off for."
-      },
-      "accepted_inputs": {
-        "type": "items",
-        "default": [],
-        "description": "Dependencies whose hand-off the lead accepted for this item."
-      },
-      "passes": {
+      "review_passes": {
         "type": "number",
         "default": 0,
-        "description": "Review stages passed."
+        "description": "How many reviews the item has passed."
       },
-      "review_requested": {
-        "type": "time",
+      "handoff_to": {
+        "type": "person",
         "default": "",
-        "description": "When the review was asked for."
-      },
-      "review_started": {
-        "type": "time",
-        "default": "",
-        "description": "When the reviewer started."
-      },
-      "wait_on": {
-        "type": "text",
-        "default": "",
-        "description": "What the holder waits for."
-      },
-      "decision_from": {
-        "type": "text",
-        "default": "",
-        "description": "The status to return to after a decision."
+        "description": "The member the item is handed to."
       },
       "question": {
         "type": "text",
         "default": "",
-        "description": "The open question."
+        "description": "The decision the item waits for."
       },
-      "override": {
+      "depends_on": {
+        "type": "items",
+        "default": [],
+        "description": "Items that must be closed first."
+      },
+      "result": {
         "type": "text",
         "default": "",
-        "description": "Why the lead lifted the limit for this item."
-      },
-      "sessions": {
-        "type": "list",
-        "default": [],
-        "description": "Every session that worked on the item."
-      },
-      "ended_sessions": {
-        "type": "list",
-        "default": [],
-        "description": "Sessions that ended on this item."
-      },
-      "first_unavailable": {
-        "type": "boolean",
-        "default": false,
-        "description": "The first outside reviewer said it cannot review."
-      },
-      "passed_commit": {
-        "type": "text",
-        "default": "",
-        "description": "The commit the last passing review saw."
-      },
-      "review_refs": {
-        "type": "list",
-        "default": [],
-        "description": "The documents a review must cite."
-      },
-      "handoff_commit": {
-        "type": "text",
-        "default": "",
-        "description": "The commit the producer's hand-off names."
+        "description": "What was delivered."
       }
     },
     "rules": {
-      "table": [
+      "description": "See the team description. Every rule below either refuses a change with its message or sets values that follow from a change.",
+      "conditions": {
+        "lead": {
+          "in": [
+            "lead",
+            "$caller.roles"
+          ]
+        },
+        "holder": {
+          "is": [
+            "$caller",
+            "$after.holder"
+          ]
+        }
+      },
+      "rules": [
         {
-          "id": "members-only",
-          "step": "*",
-          "when": {
-            "empty": "$caller.roles"
+          "id": 1,
+          "require": {
+            "not": {
+              "empty": "$caller.roles"
+            }
           },
-          "deny": "{$caller} is not a person of team {$team.name}"
+          "message": "{$caller} is not a person of team {$team.name}"
         },
         {
-          "id": "scope-branch",
-          "step": "*",
-          "when": {
+          "id": 2,
+          "on": {
+            "commands": [
+              "new"
+            ]
+          },
+          "require": {
             "all": [
               {
-                "not": {
-                  "empty": "$session.branch"
-                }
+                "condition": "lead"
               },
               {
                 "not": {
-                  "is": [
-                    "$item.branch",
-                    "$session.branch"
-                  ]
+                  "empty": "$after.done_when"
                 }
               }
             ]
           },
-          "deny": "item {$item.seq} is on branch {$item.branch}; this session works on {$session.branch}"
+          "message": "a lead creates an item, with --done_when"
         },
         {
-          "id": "new-linked",
-          "step": "new",
-          "when": {
-            "not": {
-              "empty": "$arg.gate"
-            }
+          "id": 3,
+          "on": {
+            "changes": [
+              "status"
+            ]
           },
-          "do": {
-            "set": {
-              "status": "deciding",
-              "question": "$arg.question"
-            },
-            "related": [
+          "require": {
+            "in": [
               {
-                "items": "$arg.gate",
-                "add": {
-                  "depends_on": "$item.seq"
-                }
-              }
+                "text": "{$before.status}>{$after.status}"
+              },
+              [
+                "new>ready",
+                "ready>active",
+                "active>review",
+                "review>active",
+                "review>second-review",
+                "second-review>active",
+                "second-review>closed",
+                "active>waiting",
+                "waiting>active"
+              ]
             ]
-          }
+          },
+          "message": "status does not move from {$before.status} to {$after.status}"
         },
         {
-          "id": "new",
-          "step": "new",
-          "do": {
-            "set": {
-              "done_when": "$arg.done_when"
-            }
-          }
-        },
-        {
-          "id": "edit-only-before-ready",
-          "step": "edit",
-          "when": {
-            "not": {
-              "in": [
-                "$item.status",
-                [
-                  "new",
-                  "refining"
-                ]
+          "id": 4,
+          "on": {
+            "to": {
+              "status": [
+                "ready",
+                "closed"
               ]
             }
           },
-          "deny": "the estimate is changed only before the item is ready (item {$item.seq} is {$item.status})"
-        },
-        {
-          "id": "edit",
-          "step": "edit",
-          "do": {
-            "set": {
-              "estimate": "$arg.estimate"
-            }
-          }
-        },
-        {
-          "id": "set-status-lead",
-          "step": "set-status",
-          "when": {
-            "in": [
-              "lead",
-              "$caller.roles"
-            ]
+          "require": {
+            "condition": "lead"
           },
-          "do": {
-            "set": {
-              "status": "$arg.to"
+          "message": "only a lead marks an item {$after.status}"
+        },
+        {
+          "id": 5,
+          "on": {
+            "from": {
+              "status": [
+                "ready"
+              ]
             },
-            "note": {
-              "heading": "Status set by the lead",
-              "text": "$arg.reason"
+            "to": {
+              "status": [
+                "active"
+              ]
             }
+          },
+          "set": {
+            "holder": "$caller"
           }
         },
         {
-          "id": "ended-session",
-          "step": "claim",
-          "when": {
-            "some": {
-              "items": "$team.items",
-              "match": {
-                "in": [
-                  "$session.id",
-                  "$it.ended_sessions"
-                ]
-              }
+          "id": 6,
+          "on": {
+            "to": {
+              "status": [
+                "active"
+              ]
             }
           },
-          "deny": "session {$session.id} has ended; a fresh session takes the next item"
-        },
-        {
-          "id": "dependencies-cap",
-          "step": "claim",
-          "when": {
-            ">=": [
-              {
-                "length": "$item.depends_on"
+          "require": {
+            "every": {
+              "items": {
+                "$items": "$after.depends_on"
               },
-              6
-            ]
-          },
-          "deny": "item {$item.seq} has {$item.depends_on} as dependencies; more than 5 means it should be split"
-        },
-        {
-          "id": "claim-inputs-accepted",
-          "step": "claim",
-          "when": {
-            "some": {
-              "items": "$item.depends_on",
-              "match": {
-                "not": {
-                  "in": [
-                    "$it.seq",
-                    "$item.accepted_inputs"
-                  ]
-                }
-              }
-            }
-          },
-          "deny": "item {$item.seq} needs an accepted hand-off from each of {$item.depends_on} (accepted: {$item.accepted_inputs})"
-        },
-        {
-          "id": "limit-top-level",
-          "step": "claim",
-          "when": {
-            "all": [
-              {
-                "empty": "$item.parent"
-              },
-              {
-                "empty": "$item.override"
-              },
-              {
-                ">=": [
-                  {
-                    "count": {
-                      "items": "$team.items",
-                      "match": {
-                        "all": [
-                          {
-                            "empty": "$it.parent"
-                          },
-                          {
-                            "is": [
-                              "$it.status",
-                              "in progress"
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  },
-                  2
-                ]
-              }
-            ]
-          },
-          "deny": "2 top-level items are in progress; the lead may lift the limit for this item (step lift-limit)"
-        },
-        {
-          "id": "limit-split",
-          "step": "claim",
-          "when": {
-            "all": [
-              {
-                "not": {
-                  "empty": "$item.parent"
-                }
-              },
-              {
-                ">=": [
-                  {
-                    "count": {
-                      "items": "$team.items",
-                      "match": {
-                        "all": [
-                          {
-                            "not": {
-                              "empty": "$it.parent"
-                            }
-                          },
-                          {
-                            "is": [
-                              "$it.status",
-                              "in progress"
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  },
-                  5
-                ]
-              }
-            ]
-          },
-          "deny": "5 split items are in progress"
-        },
-        {
-          "id": "claim",
-          "step": "claim",
-          "when": {
-            "is": [
-              "$item.status",
-              "ready"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "in progress",
-              "holder": "$caller"
-            },
-            "add": {
-              "sessions": "$session.id"
-            }
-          }
-        },
-        {
-          "id": "lift-limit",
-          "step": "lift-limit",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.reason"
-                }
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "override": "$arg.reason"
-            }
-          }
-        },
-        {
-          "id": "reassign",
-          "step": "reassign",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "in": [
-                  "member",
-                  {
-                    "roles_of": "$arg.to"
-                  }
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.reason"
-                }
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "holder": "$arg.to"
-            },
-            "note": {
-              "heading": "Reassigned",
-              "text": "$arg.reason"
-            }
-          }
-        },
-        {
-          "id": "wait",
-          "step": "wait",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$caller",
-                  "$item.holder"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "in progress"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.on"
-                }
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "waiting",
-              "wait_on": "$arg.on"
-            }
-          }
-        },
-        {
-          "id": "resume",
-          "step": "resume",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$caller",
-                  "$item.holder"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "waiting"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "in progress",
-              "wait_on": ""
-            }
-          }
-        },
-        {
-          "id": "ask-decision",
-          "step": "ask-decision",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "$item.status",
-                  [
-                    "refining",
-                    "in progress"
-                  ]
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.question"
-                }
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "deciding",
-              "decision_from": "$item.status",
-              "question": "$arg.question"
-            }
-          }
-        },
-        {
-          "id": "decide",
-          "step": "decide",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "deciding"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$item.decision_from"
-                }
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "$item.decision_from",
-              "decision_from": "",
-              "question": ""
-            },
-            "note": {
-              "heading": "Decision",
-              "text": "$arg.answer"
-            }
-          }
-        },
-        {
-          "id": "blocked-by-decision",
-          "step": [
-            "request-review",
-            "close"
-          ],
-          "when": {
-            "some": {
-              "items": "$item.depends_on",
               "match": {
                 "is": [
                   "$it.status",
-                  "deciding"
+                  "closed"
                 ]
               }
             }
           },
-          "deny": "item {$item.seq} depends on an item that waits for a decision"
+          "message": "item {$after.seq} waits for its dependencies"
         },
         {
-          "id": "request-review-needs-done-when",
-          "step": "request-review",
-          "when": {
+          "id": 7,
+          "on": {
+            "to": {
+              "status": [
+                "review"
+              ]
+            }
+          },
+          "require": {
             "all": [
               {
-                "empty": "$item.done_when"
+                "condition": "holder"
               },
               {
                 "not": {
-                  "contains": [
-                    "$item.body",
-                    "## Definition of done"
-                  ]
+                  "empty": "$after.result"
                 }
+              },
+              {
+                "in": [
+                  "reviewer",
+                  {
+                    "roles_of": "$after.reviewer"
+                  }
+                ]
               }
             ]
           },
-          "deny": "item {$item.seq} has no definition of done (field done_when, or a ## Definition of done section in the body)"
+          "message": "the holder asks for review with a result and a reviewer"
         },
         {
-          "id": "request-review",
-          "step": "request-review",
-          "when": {
+          "id": 8,
+          "on": {
+            "to": {
+              "status": [
+                "second-review"
+              ]
+            }
+          },
+          "require": {
             "all": [
               {
                 "is": [
                   "$caller",
-                  "$item.holder"
+                  "$before.reviewer"
                 ]
               },
               {
-                "is": [
-                  "$item.status",
-                  "in progress"
+                "in": [
+                  "outside-reviewer",
+                  {
+                    "roles_of": "$after.reviewer"
+                  }
                 ]
               }
             ]
           },
-          "do": {
-            "set": {
-              "status": "peer review",
-              "reviewer": "",
-              "review_requested": "$now"
+          "message": "the reviewer passes the item to an outside reviewer"
+        },
+        {
+          "id": 9,
+          "on": {
+            "from": {
+              "status": [
+                "review",
+                "second-review"
+              ]
             },
-            "say": "item {$item.seq} is in peer review; end this session now"
+            "to": {
+              "status": [
+                "second-review",
+                "closed"
+              ]
+            }
+          },
+          "set": {
+            "review_passes": {
+              "plus": [
+                "$before.review_passes",
+                1
+              ]
+            }
           }
         },
         {
-          "id": "review-own-session",
-          "step": [
-            "start-review",
-            "review"
-          ],
-          "when": {
-            "in": [
-              "$session.id",
-              "$item.sessions"
+          "id": 10,
+          "on": {
+            "to": {
+              "status": [
+                "closed"
+              ]
+            }
+          },
+          "require": {
+            ">=": [
+              "$after.review_passes",
+              2
             ]
           },
-          "deny": "session {$session.id} worked on item {$item.seq}; another session reviews it"
+          "message": "an item closes after two reviews (passed {$after.review_passes})"
         },
         {
-          "id": "start-review-peer",
-          "step": "start-review",
-          "when": {
+          "id": 11,
+          "on": {
+            "changes": [
+              "handoff_to"
+            ]
+          },
+          "require": {
             "all": [
               {
                 "is": [
-                  "$item.status",
-                  "peer review"
+                  "$caller",
+                  "$before.holder"
                 ]
-              },
-              {
-                "empty": "$item.reviewer"
               },
               {
                 "in": [
                   "member",
-                  "$caller.roles"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "reviewer": "$caller",
-              "review_started": "$now"
-            }
-          }
-        },
-        {
-          "id": "start-review-outside",
-          "step": "start-review",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$item.status",
-                  "outside review"
-                ]
-              },
-              {
-                "empty": "$item.reviewer"
-              },
-              {
-                "in": [
-                  "outside-reviewer",
-                  "$caller.roles"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "reviewer": "$caller",
-              "review_started": "$now"
-            }
-          }
-        },
-        {
-          "id": "start-review-fallback",
-          "step": "start-review",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$item.status",
-                  "outside review"
-                ]
-              },
-              {
-                "empty": "$item.reviewer"
-              },
-              {
-                "in": [
-                  "second-outside-reviewer",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "is": [
-                  "$item.first_unavailable",
-                  true
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "reviewer": "$caller",
-              "review_started": "$now"
-            }
-          }
-        },
-        {
-          "id": "unavailable",
-          "step": "unavailable",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$item.status",
-                  "outside review"
-                ]
-              },
-              {
-                "in": [
-                  "outside-reviewer",
-                  "$caller.roles"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "first_unavailable": true,
-              "reviewer": ""
-            }
-          }
-        },
-        {
-          "id": "take-over-stale-review",
-          "step": "take-over-review",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                ">=": [
                   {
-                    "age": "$item.review_started"
-                  },
-                  1200
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "reviewer": ""
-            },
-            "note": {
-              "heading": "Stale review handed on",
-              "text": "$arg.reason"
-            }
-          }
-        },
-        {
-          "id": "review-who",
-          "step": "review",
-          "when": {
-            "not": {
-              "is": [
-                "$caller",
-                "$item.reviewer"
-              ]
-            }
-          },
-          "deny": "the reviewer of item {$item.seq} is {$item.reviewer}"
-        },
-        {
-          "id": "review-cites-document",
-          "step": "review",
-          "when": {
-            "all": [
-              {
-                "not": {
-                  "empty": "$item.review_refs"
-                }
-              },
-              {
-                "not": {
-                  "contains": [
-                    "$arg.comments",
-                    "$item.review_refs"
-                  ]
-                }
-              }
-            ]
-          },
-          "deny": "the comments cite none of the review documents ({$item.review_refs})"
-        },
-        {
-          "id": "review-reject",
-          "step": "review",
-          "when": {
-            "is": [
-              "$arg.verdict",
-              "reject"
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "in progress",
-              "reviewer": "",
-              "passes": 0
-            },
-            "note": {
-              "heading": "Review rejected",
-              "text": "$arg.comments"
-            }
-          }
-        },
-        {
-          "id": "review-pass-peer",
-          "step": "review",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$arg.verdict",
-                  "pass"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "peer review"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "outside review",
-              "reviewer": "",
-              "passes": {
-                "plus": [
-                  "$item.passes",
-                  1
-                ]
-              },
-              "passed_commit": "$session.commit"
-            }
-          }
-        },
-        {
-          "id": "review-pass-outside",
-          "step": "review",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$arg.verdict",
-                  "pass"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "outside review"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "review complete",
-              "reviewer": "",
-              "passes": {
-                "plus": [
-                  "$item.passes",
-                  1
-                ]
-              },
-              "passed_commit": "$session.commit"
-            }
-          }
-        },
-        {
-          "id": "record-handoff",
-          "step": "record-handoff",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$caller",
-                  "$item.holder"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.dependent"
-                }
-              },
-              {
-                "not": {
-                  "empty": "$arg.note"
-                }
-              },
-              {
-                "not": {
-                  "empty": "$arg.commit"
-                }
-              }
-            ]
-          },
-          "do": {
-            "add": {
-              "handoff_to": "$arg.dependent"
-            },
-            "note": {
-              "heading": "Hand-off",
-              "text": "$arg.note"
-            },
-            "related": [
-              {
-                "items": "$arg.dependent",
-                "remove": {
-                  "accepted_inputs": "$item.seq"
-                }
-              }
-            ],
-            "set": {
-              "handoff_commit": "$arg.commit"
-            }
-          }
-        },
-        {
-          "id": "accept-input-recorded",
-          "step": "accept-input",
-          "when": {
-            "not": {
-              "every": {
-                "items": "$arg.producer",
-                "match": {
-                  "in": [
-                    "$item.seq",
-                    "$it.handoff_to"
-                  ]
-                }
-              }
-            }
-          },
-          "deny": "item {$arg.producer} recorded no hand-off for item {$item.seq}"
-        },
-        {
-          "id": "accept-input-reviewed",
-          "step": "accept-input",
-          "when": {
-            "not": {
-              "every": {
-                "items": "$arg.producer",
-                "match": {
-                  "all": [
-                    {
-                      "in": [
-                        "$it.status",
-                        [
-                          "review complete",
-                          "closed"
-                        ]
-                      ]
-                    },
-                    {
-                      "not": {
-                        "empty": "$it.handoff_commit"
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "deny": "item {$arg.producer} has not passed its review or names no commit for its hand-off"
-        },
-        {
-          "id": "accept-input",
-          "step": "accept-input",
-          "when": {
-            "in": [
-              "lead",
-              "$caller.roles"
-            ]
-          },
-          "do": {
-            "add": {
-              "accepted_inputs": "$arg.producer"
-            }
-          }
-        },
-        {
-          "id": "reject-input",
-          "step": "reject-input",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.reason"
-                }
-              }
-            ]
-          },
-          "do": {
-            "remove": {
-              "accepted_inputs": "$arg.producer"
-            },
-            "note": {
-              "heading": "Hand-off rejected",
-              "text": "item {$arg.producer}: {$arg.reason}"
-            }
-          }
-        },
-        {
-          "id": "close-passes",
-          "step": "close",
-          "when": {
-            "<=": [
-              "$item.passes",
-              1
-            ]
-          },
-          "deny": "item {$item.seq} passed {$item.passes} of 2 review stages"
-        },
-        {
-          "id": "close-dependents-accepted",
-          "step": "close",
-          "when": {
-            "some": {
-              "items": "$team.items",
-              "match": {
-                "all": [
-                  {
-                    "in": [
-                      "$item.seq",
-                      "$it.depends_on"
-                    ]
-                  },
-                  {
-                    "not": {
-                      "in": [
-                        "$item.seq",
-                        "$it.accepted_inputs"
-                      ]
-                    }
+                    "roles_of": "$after.handoff_to"
                   }
                 ]
               }
-            }
+            ]
           },
-          "deny": "a dependent of item {$item.seq} has not accepted its hand-off"
+          "message": "the holder hands an item to another member"
         },
         {
-          "id": "close-same-commit",
-          "step": "close",
-          "when": {
-            "not": {
-              "is": [
-                "$item.passed_commit",
-                "$session.commit"
+          "id": 12,
+          "on": {
+            "changes": [
+              "handoff_to"
+            ]
+          },
+          "set": {
+            "holder": "$after.handoff_to"
+          }
+        },
+        {
+          "id": 13,
+          "on": {
+            "to": {
+              "status": [
+                "waiting"
               ]
             }
           },
-          "deny": "the review passed commit {$item.passed_commit}; the work is now at {$session.commit}: ask for a new review"
-        },
-        {
-          "id": "close",
-          "step": "close",
-          "when": {
-            "all": [
-              {
-                "is": [
-                  "$caller",
-                  "$item.holder"
-                ]
-              },
-              {
-                "is": [
-                  "$item.status",
-                  "review complete"
-                ]
-              }
-            ]
-          },
-          "do": {
-            "set": {
-              "status": "closed"
-            },
-            "add": {
-              "ended_sessions": "$session.id"
+          "require": {
+            "not": {
+              "empty": "$after.question"
             }
-          }
+          },
+          "message": "an item waits with the question it waits for"
         },
         {
-          "id": "remove-duplicate",
-          "step": "remove-duplicate",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.reason"
-                }
-              }
-            ]
+          "id": 14,
+          "on": {
+            "from": {
+              "status": [
+                "waiting"
+              ]
+            }
           },
-          "do": {
-            "delete": true
-          }
+          "require": {
+            "condition": "lead"
+          },
+          "message": "only a lead answers the question of a waiting item"
         },
         {
-          "id": "move-branch",
-          "step": "move-branch",
-          "when": {
-            "all": [
-              {
-                "in": [
-                  "lead",
-                  "$caller.roles"
-                ]
-              },
-              {
-                "not": {
-                  "empty": "$arg.to"
-                }
-              }
+          "id": 15,
+          "require": {
+            "<=": [
+              "$after.estimate",
+              90
             ]
           },
-          "do": {
-            "branch": "$arg.to"
-          }
+          "message": "an item is at most 90 minutes (got {$after.estimate})"
         },
         {
-          "id": "release-to-users",
-          "step": "release-to-users",
-          "when": {
-            "in": [
-              "lead",
-              "$caller.roles"
+          "id": 16,
+          "on": {
+            "commands": [
+              "archive"
             ]
           },
-          "do": {
-            "team": ""
-          }
+          "require": {
+            "is": [
+              "$after.status",
+              "closed"
+            ]
+          },
+          "message": "only a closed item is archived"
         }
       ],
-      "pop": [
+      "queue": [
         {
-          "id": "old-reviews-first",
-          "step": "start-review",
-          "when": {
-            ">=": [
+          "roles": [
+            "reviewer",
+            "outside-reviewer"
+          ],
+          "description": "a reviewer takes what waits for its review",
+          "match": {
+            "all": [
               {
-                "age": "$item.review_requested"
+                "in": [
+                  "$it.status",
+                  [
+                    "review",
+                    "second-review"
+                  ]
+                ]
               },
-              600
+              {
+                "is": [
+                  "$it.reviewer",
+                  "$caller"
+                ]
+              }
             ]
           }
         },
         {
-          "id": "own-work",
-          "step": "claim"
+          "roles": [
+            "member"
+          ],
+          "description": "a member takes ready work",
+          "match": {
+            "is": [
+              "$it.status",
+              "ready"
+            ]
+          },
+          "take": {
+            "status": "active"
+          }
         },
         {
-          "id": "reviews",
-          "step": "start-review"
+          "roles": [
+            "lead"
+          ],
+          "description": "the lead answers waiting items first, then readies new ones",
+          "match": {
+            "in": [
+              "$it.status",
+              [
+                "waiting",
+                "new"
+              ]
+            ]
+          }
         }
       ],
       "filters": {
         "decisions": {
-          "description": "Items waiting for a decision, with the question.",
-          "when": {
+          "description": "Items waiting for the lead.",
+          "match": {
             "is": [
-              "$item.status",
-              "deciding"
+              "$it.status",
+              "waiting"
             ]
           }
         },
-        "stale-reviews": {
-          "description": "Reviews started more than 20 minutes ago.",
-          "when": {
-            ">=": [
-              {
-                "age": "$item.review_started"
-              },
-              1200
+        "in-review": {
+          "description": "Items in either review.",
+          "match": {
+            "in": [
+              "$it.status",
+              [
+                "review",
+                "second-review"
+              ]
             ]
           }
         }

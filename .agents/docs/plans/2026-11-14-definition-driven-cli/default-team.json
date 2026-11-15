@@ -1,24 +1,97 @@
 {
   "default": {
+    "description": "One or more agents; status new, active, closed.",
     "people": {
-      "agent-1": ["member"]
+      "agent-1": [
+        "member"
+      ]
     },
     "item": {
-      "status": {"type": "text", "default": "new", "values": ["new", "active", "closed"], "final": ["closed"], "description": "Where the item is."}
+      "status": {
+        "type": "text",
+        "default": "new",
+        "values": [
+          "new",
+          "active",
+          "closed"
+        ],
+        "final": [
+          "closed"
+        ],
+        "description": "Where the item is."
+      }
     },
     "rules": {
-      "table": [
-        {"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"},
-        {"id": "new", "step": "new", "do": {"set": {"status": "new"}}},
-        {"id": "start", "step": "start", "when": {"is": ["$item.status", "new"]}, "do": {"set": {"status": "active"}}},
-        {"id": "close", "step": "close", "when": {"is": ["$item.status", "active"]}, "do": {"set": {"status": "closed"}}},
-        {"id": "archive", "step": "archive", "when": {"is": ["$item.status", "closed"]}, "do": {"archive": true}}
+      "description": "Only people of the team change items. Status moves new to active to closed. Only a closed item is archived.",
+      "rules": [
+        {
+          "id": 1,
+          "require": {
+            "not": {
+              "empty": "$caller.roles"
+            }
+          },
+          "message": "{$caller} is not a person of team {$team.name}"
+        },
+        {
+          "id": 2,
+          "on": {
+            "changes": [
+              "status"
+            ]
+          },
+          "require": {
+            "in": [
+              {
+                "text": "{$before.status}>{$after.status}"
+              },
+              [
+                "new>active",
+                "active>closed"
+              ]
+            ]
+          },
+          "message": "status does not move from {$before.status} to {$after.status}"
+        },
+        {
+          "id": 3,
+          "on": {
+            "commands": [
+              "archive"
+            ]
+          },
+          "require": {
+            "is": [
+              "$after.status",
+              "closed"
+            ]
+          },
+          "message": "only a closed item is archived"
+        }
       ],
-      "pop": [
-        {"id": "next-item", "step": "start"}
+      "queue": [
+        {
+          "match": {
+            "is": [
+              "$it.status",
+              "new"
+            ]
+          },
+          "take": {
+            "status": "active"
+          }
+        }
       ],
       "filters": {
-        "active": {"description": "The items being worked on.", "when": {"is": ["$item.status", "active"]}}
+        "active": {
+          "description": "Items being worked on.",
+          "match": {
+            "is": [
+              "$it.status",
+              "active"
+            ]
+          }
+        }
       }
     }
   }

@@ -6,7 +6,7 @@ Status: the target behaviour of the CLI when the simplify branch is finished. Wr
 
 1. [The pattern](#1-the-pattern)
 2. [Terms](#2-terms)
-3. [Schemas](#3-schemas): 3.1 the base item, 3.2 the item definition, 3.3 the team file and the rule set, 3.4 the configuration, 3.5 the index, 3.6 the example team file, 3.7 the packaged defaults
+3. [Schemas](#3-schemas) (the team rules have their own specification, [team-rules-spec.md](team-rules-spec.md), and schema, [team-rules.schema.json](team-rules.schema.json)): 3.1 the base item, 3.2 the item definition, 3.3 the team file and the rule set, 3.4 the configuration, 3.5 the index, 3.6 the example team file, 3.7 the packaged defaults
 4. [Behaviour](#4-behaviour): 4.1 the backlog location, 4.2 numbers, slugs and priority, 4.3 the definition that applies, 4.4 history, 4.5 validation, 4.6 how a team command applies the rules, 4.7 inputs and environment variables, 4.8 output and exit codes, 4.9 redaction, 4.10 two writers, 4.11 setup, 4.12 upgrade
 5. [Commands](#5-commands): 5.1 user commands, 5.2 team commands, 5.3 removed commands
 6. [The owner's team file](#6-the-owners-team-file)
@@ -31,8 +31,9 @@ There are two sets of commands, never aliases of each other:
 | Field | A property an item definition declares (3.2). |
 | Item definition | The list of fields an item has beyond the base properties, with their types, defaults and allowed values (3.2). |
 | Team | A named group of people with its own item definition and rule set, held in the team file (3.3). |
-| Rule set | The ordered table of rules, the pop table and the filters of a team (3.3, 4.6). |
-| Step | The word a rule of the table names, and the second word of `backlog team update <item> <step>` on the branch today. It is waiting for the owner's decision (section 7, choice 1); until decided, the code keeps it. |
+| Change | What a team command would do to one item: the item before and the item after (team rules spec, 2). |
+| Rule | One requirement (what must hold for a change, with the error text) or one derivation (what a change sets by itself). Every rule of a team is evaluated on every change; no command names a rule (decision 53). |
+| Rule set | A team's rules, named conditions, queue and filters (3.3, [team-rules-spec.md](team-rules-spec.md)). |
 | Priority | The place of an item in its branch's list in the index, written `p0`, `p1`, ... (4.2). |
 | Index | The file that holds the priority order of each branch (3.5). |
 | Backlog location | The git repository that holds the items: the current repository, or one outside it (4.1). |
@@ -72,13 +73,7 @@ There are three places a definition comes from: the `item` of a team in the team
 
 The team file holds one entry per team, each with `people` (each person with a list of role words), `item` (the team item definition, 3.2) and `rules`. Its location is named in the configuration (`teams_file`; default `.backlog/teams.json`). The CLI only reads it (ruling R5).
 
-`rules` holds:
-
-- `table`: the ordered list of rules. A rule has an `id`, a `step` (see 2), an optional condition `when`, and either `deny` (the text of a refusal) or `do` (the effects).
-- `pop`: the ordered list of what `backlog team pop` tries for the caller.
-- `filters`: named conditions over the team's items.
-
-How a team command applies them is 4.6.
+`rules` is the team's rule set. Its form is [team-rules.schema.json](team-rules.schema.json) and its meaning is [team-rules-spec.md](team-rules-spec.md): what triggers the rules, how a change is evaluated, each kind of rule with examples (transition, field, permission, derivation, relation, creation), conditions and values, how rules affect each other and how a dependency between rules is declared, the queue and filters, error texts, and the validation of the rules. Each team may carry a `description` of its way of working in words (decision 56).
 
 ### 3.4 The configuration: [config.schema.json](config.schema.json)
 
@@ -104,11 +99,11 @@ Per branch, the list of the open items in priority order: number, slug, title an
 
 Shipped with the CLI in the public repository (decision 35) and valid against 3.3. Three teams:
 
-- `simple`: one agent; status todo, doing, done; an estimate and a result. Rules: only people of the team act; a new item needs an estimate of at most 120 minutes; one item in progress at a time; finishing needs a result; a done item can be archived. Pop offers the next item to start.
-- `advanced`: a lead and three members; an item can be split into children, depend on other items, be held by a member and checked by another. Rules cap an item at 60 minutes, let the lead split, let a member claim only an item whose children and dependencies are closed, and require a check by someone other than the holder.
-- `lead-and-reviewers`: a lead, members and two outside reviewers; review requests, two review stages, hand-off between members, waiting on a decision, limits a lead can lift. It shows every behaviour the rule format supports, each with the allowed case and the refused case (owner answers of 2026-11-08, round 2).
+- `simple`: one agent; status todo, doing, done; an estimate and a result; six rules (people only, size on creation, the allowed moves of status, one item doing, done needs a result, archive only done); the queue takes the next todo item.
+- `advanced`: a lead and three members; status new, ready, active, checking, closed; holder, checker, parent, dependencies; eleven rules, among them a derivation (becoming active makes the caller the holder), a named condition (dependencies closed), a relation rule (one active item per member) and permission rules; the queue gives a member its checks first, then ready work.
+- `lead-and-reviewers`: a lead, members, a reviewer and an outside reviewer; two reviews counted by a derivation, hand-off between members (a derivation moves the holder), waiting for a decision of the lead; sixteen rules; the queue serves reviewers, members and the lead.
 
-Each team's item definition and rules are in the file; the examples guide (plan, task 9) walks through each rule in words.
+Each team's `description` says its way of working in words. The examples guide (plan, task 12) explains every rule, and shows for each the change it allows and the change it refuses with its text.
 
 ### 3.7 The packaged defaults
 
@@ -145,14 +140,7 @@ Every change adds one entry to the item's history (3.1), written by the CLI. A c
 
 ### 4.6 How a team command applies the rules
 
-For a command on an item, the rules of the table are read in order; the first whose `step` matches and whose `when` holds decides. `deny` refuses with its text, exit 1. `do` applies its effects. If no rule decides, the command is refused.
-
-- Conditions: `all`, `any`, `not`, `is`, `in`, `empty`, `>=`, `<=`, `regex`, `contains`, `every`, `some`.
-- Functions: `count`, `length`, `plus`, `age`, `roles_of`, `text`.
-- Values a rule reads: `$item` (the item), `$arg` (the arguments of the command, `--<name> <value>`), `$caller` (the agent and its roles), `$team` (its name and items), `$session`, and `$it` inside `every`, `some` and `count`.
-- Effects: `set`, `add`, `remove` (fields), `note` (history), `related`, `place` (priority), `archive`, `delete`, `branch`, `team`, `say` (a line to the caller).
-- `backlog team pop` walks the pop table and takes the first entry whose step the rules allow for the caller on an item; nothing allowed is the answer idle, exit 3.
-- A filter is read with `backlog team query filter <name>`.
+Every team command that would change an item builds the change (the item before and after) and evaluates it: first the structure (schema and team item definition), then every derivation in the order of their dependencies, then every requirement. If all requirements hold, the change is written with one history entry; otherwise nothing is written, exit 1, and every failing rule's text is returned. `--whatif` evaluates and writes nothing. The full specification is [team-rules-spec.md](team-rules-spec.md).
 
 ### 4.7 Inputs and environment variables
 
@@ -222,21 +210,21 @@ Every team command takes `--team <name>`, `--agent <name>`, `--session <id>`, `-
 
 | Command | Flags of the command | Subcommand or property | Flags of the subcommand or property |
 |---|---|---|---|
-| `backlog team new` | *`--title <text>`, *`--description <text>`, `--ask`, *`--whatif`, `--<argument> <value>` of the rules | *`--file <item.json>` | *`--whatif` |
-| *`backlog team list` | `--show-all` | `branch <name>` | `--show-all` |
+| `backlog team new` | *`--title <text>`, *`--description <text>`, *`--<field> <value>` (each field of the team item definition), `--ask`, *`--whatif` | *`--file <item.json>` | *`--whatif` |
+| *`backlog team list` | `--show-all`, *`--filter <name>` | `branch <name>` | `--show-all`, *`--filter <name>` |
 | *`backlog team show <item>` | `--show-all` | | |
-| `backlog team update <item>` | *`--whatif` | *`title`, *`description`, *`status`, *`priority p<N>`, *`<field> <value>` (each field of the team item definition); `<step>` with `--<argument> <value>` (the form of today, waiting for choice 1) | *`--whatif` |
+| *`backlog team update <item>` | *`--whatif` | `title <text>`, `description <text>`, `status <word>`, `priority p<N>`, `<field> <value>` (each field of the team item definition); every rule of the team is evaluated on the change | *`--whatif` |
 | *`backlog team archive <item>` | *`--whatif` | `done` | *`--whatif` |
 | *`backlog team import <branch>` | `--higher`, *`--whatif` | | |
 | *`backlog team branch` | | `import <branch>` | `--higher`, *`--whatif` |
 | `backlog team pop` | *`--whatif` | | |
-| `backlog team query` | | `filter <name>`, `check <item> <step>`, `plan`, `rules`, `steps` | `--show-all` on `rules` |
+| `backlog team query` | | `plan` (what the queue offers each person), `rules` (the rule set) | `--show-all` on `rules` |
 | `backlog team validate` | `--show-all` | | |
 | `backlog team migrate` | *`--whatif`, `--ask`, `--show-all` | | |
 
 ### 5.3 Removed commands
 
-`backlog next`, `changes`, `fields`, `done`, `move`, `init clean` (decision 41); `backlog history` (decision 15); `backlog team define` and `backlog team workflow` (ruling R5); the flags `--dry-run`, `--body`, `--name`, `--append`, `--claim`, `--section` and its line flags, and every flag that sets one field (decisions 2, 3, 9, 11 to 14).
+`backlog next`, `changes`, `fields`, `done`, `move`, `init clean` (decision 41); `backlog history` (decision 15); `backlog team define` and `backlog team workflow` (ruling R5); `backlog team update <item> <step>`, `backlog team query check`, `query steps`, `query filter` (replaced by `backlog team list --filter`) and every step word (decisions 53 and 54); the flags `--dry-run`, `--body`, `--name`, `--append`, `--claim`, `--section` and its line flags, and every flag that sets one field (decisions 2, 3, 9, 11 to 14).
 
 ## 6. The owner's team file
 
@@ -244,7 +232,7 @@ The owner's team file, with the actual rules and item definition of the Cody tea
 
 ## 7. Choices the lead made, for the owner to confirm
 
-1. **Step.** On the branch today a rule is chosen by a `step` word, and a team update is `backlog team update <item> <step>`. The owner never approved the concept: it entered through the lead's record of the owner's answers of 2026-11-08 (round 3) and the design of 2026-11-09. Decision 38 asks for `backlog team update <item> <property> <value>`. Whether rules are chosen by command and property instead of a step is the owner's decision; until then the code keeps steps.
+1. (decided 2026-11-15: no step; decisions 53 to 56)
 2. The packaged default item definition declares `status` only (new, active, closed).
 3. A user command checks the type of a value, not its `values` list.
 4. The keys `item_definition`, `archive_folder`, the five variable keys, `redaction_patterns` (with `find` and `replace`), and the history key `command` (on the branch today it is called `step`).
@@ -272,13 +260,9 @@ The owner's team file, with the actual rules and item definition of the Cody tea
 | `archive done`: which items count as done | code | the final values of the definition that applies |
 | An item that cannot be read: exit 2 naming the field, and the repair | code (`src/shared/repair.js`) | the command that repairs it, now that `--restore` and the field flags go |
 | `--ask` without a terminal | code | exit 2, nothing written |
-| The effects `related`, `place`, `branch`, `team`, `delete`, `say` | rule evaluator (`src/team/rules/step.js`) | what each does |
-| The functions `count`, `length`, `plus`, `age`, `roles_of`, `text` and each condition | rule evaluator (`src/team/rules/expression.js`) | what each does |
-| `$session` and `$caller` | rule evaluator | their keys |
-| The pop table's skip set and queue order | rule evaluator (`src/team/rules/pop.js`) | the order items are tried in |
 | The update notice: weekly check, wait at most 1.5 s, warning only | code (`src/upgrade.js`) | the schedule and where its settings live |
 | The run recorder hook, `SMOOTH_BACKLOG_CLI_RUN_HOOK` | code | waiting for the owner |
 | Git 2.40 or newer for team commands | code | the requirement |
 | The redaction of credentials in addresses | code (`src/shared/safety.js`) | the patterns |
 | The repository name from git (origin `owner/name`) | code | what happens with no origin |
-| The validation of a team file: every check `backlog team validate` makes | code (`src/team/rules/validate*.js`) | the list of checks |
+| The rule evaluator of the branch today (steps, ordered table, effects) | code (`src/team/rules/`) | replaced by team-rules-spec.md; the code is rewritten (plan) |

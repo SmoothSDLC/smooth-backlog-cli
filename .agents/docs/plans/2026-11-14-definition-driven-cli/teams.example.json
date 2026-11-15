@@ -32,153 +32,169 @@
       }
     },
     "rules": {
-      "description": "Only the team's agent changes items. A new item needs an estimate of at most 120 minutes. Status moves todo to doing to done. One item is doing at a time. Done needs a result.",
+      "description": "Only the team's agent changes items. A new item needs an estimate of 1 to 120 minutes. Status moves todo to doing to done. One item is doing at a time. Done needs a result. Only a done item is archived.",
       "rules": [
         {
           "id": 1,
-          "description": "only people of the team",
           "require": {
-            "not": {
-              "empty": "$caller.roles"
+            "!!": {
+              "var": "caller.roles"
             }
           },
-          "message": "{$caller} is not a person of team {$team.name}"
+          "error": "{caller.name} is not a person of team {team.name}"
         },
         {
           "id": 2,
-          "on": {
-            "commands": [
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "new"
             ]
           },
           "require": {
-            "all": [
+            "and": [
               {
                 ">": [
-                  "$after.estimate",
+                  {
+                    "var": "next.estimate"
+                  },
                   0
                 ]
               },
               {
                 "<=": [
-                  "$after.estimate",
+                  {
+                    "var": "next.estimate"
+                  },
                   120
                 ]
               }
             ]
           },
-          "message": "a new item needs --estimate between 1 and 120 minutes (got {$after.estimate}); split larger work"
+          "error": "a new item needs --estimate between 1 and 120 minutes (got {next.estimate}); split larger work"
         },
         {
           "id": 3,
-          "on": {
-            "changes": [
-              "status"
-            ]
+          "when": {
+            "changed": "status"
           },
           "require": {
-            "any": [
+            "in": [
               {
-                "all": [
+                "cat": [
                   {
-                    "is": [
-                      "$before.status",
-                      "todo"
-                    ]
+                    "var": "prev.status"
                   },
+                  ">",
                   {
-                    "is": [
-                      "$after.status",
-                      "doing"
-                    ]
+                    "var": "next.status"
                   }
                 ]
               },
+              [
+                "todo>doing",
+                "doing>done"
+              ]
+            ]
+          },
+          "error": "status does not move from {prev.status} to {next.status}"
+        },
+        {
+          "id": 4,
+          "when": {
+            "and": [
               {
-                "all": [
+                "changed": "status"
+              },
+              {
+                "===": [
                   {
-                    "is": [
-                      "$before.status",
-                      "doing"
-                    ]
+                    "var": "next.status"
                   },
-                  {
-                    "is": [
-                      "$after.status",
-                      "done"
-                    ]
-                  }
+                  "doing"
                 ]
               }
             ]
           },
-          "message": "status moves todo to doing to done, not {$before.status} to {$after.status}"
-        },
-        {
-          "id": 4,
-          "on": {
-            "to": {
-              "status": [
-                "doing"
-              ]
-            }
-          },
           "require": {
             "<=": [
               {
-                "count": {
-                  "items": "$team.items",
-                  "match": {
-                    "is": [
-                      "$it.status",
-                      "doing"
-                    ]
-                  }
+                "length": {
+                  "filter": [
+                    {
+                      "var": "team.items"
+                    },
+                    {
+                      "===": [
+                        {
+                          "var": "status"
+                        },
+                        "doing"
+                      ]
+                    }
+                  ]
                 }
               },
               1
             ]
           },
-          "message": "finish the item in progress first"
+          "error": "finish the item in progress first"
         },
         {
           "id": 5,
-          "on": {
-            "to": {
-              "status": [
-                "done"
-              ]
-            }
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "done"
+                ]
+              }
+            ]
           },
           "require": {
-            "not": {
-              "empty": "$after.result"
+            "!!": {
+              "var": "next.result"
             }
           },
-          "message": "done needs a result: backlog team update {$after.seq} result \"<what was delivered>\""
+          "error": "done needs a result: backlog team update {next.seq} result \"<what was delivered>\""
         },
         {
           "id": 6,
-          "on": {
-            "commands": [
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "archive"
             ]
           },
           "require": {
-            "is": [
-              "$after.status",
+            "===": [
+              {
+                "var": "next.status"
+              },
               "done"
             ]
           },
-          "message": "only a done item is archived"
+          "error": "only a done item is archived"
         }
       ],
       "queue": [
         {
           "description": "the next item to start",
           "match": {
-            "is": [
-              "$it.status",
+            "===": [
+              {
+                "var": "status"
+              },
               "todo"
             ]
           },
@@ -191,8 +207,10 @@
         "doing": {
           "description": "The item in progress.",
           "match": {
-            "is": [
-              "$it.status",
+            "===": [
+              {
+                "var": "status"
+              },
               "doing"
             ]
           }
@@ -201,7 +219,7 @@
     }
   },
   "advanced": {
-    "description": "A lead and three members. The lead splits large work into items of at most 60 minutes. A member takes a ready item whose dependencies are closed, works on it, and another member checks it before it closes.",
+    "description": "A lead and three members. The lead creates and readies items of at most 60 minutes, splitting larger work into children. A member takes a ready item whose dependencies are closed by setting itself as holder and the status active, holds one active item at a time, and names another member as checker when asking for a check; only the checker closes.",
     "people": {
       "lead-1": [
         "lead"
@@ -264,68 +282,66 @@
       }
     },
     "rules": {
-      "description": "Only people of the team change items; only the lead creates and readies them. Items are at most 60 minutes. Status moves new, ready, active, checking, closed, and checking may go back to active. Becoming active makes the caller the holder and needs every dependency closed; a member holds one active item. Checking needs a result and a checker who is not the holder. Only the checker closes.",
-      "conditions": {
-        "dependencies-closed": {
-          "every": {
-            "items": {
-              "$items": "$after.depends_on"
-            },
-            "match": {
-              "is": [
-                "$it.status",
-                "closed"
-              ]
-            }
-          }
-        }
-      },
+      "description": "See the team description; each rule refuses one kind of change.",
       "rules": [
         {
           "id": "members",
           "require": {
-            "not": {
-              "empty": "$caller.roles"
+            "!!": {
+              "var": "caller.roles"
             }
           },
-          "message": "{$caller} is not a person of team {$team.name}"
+          "error": "{caller.name} is not a person of team {team.name}"
         },
         {
           "id": "lead-creates",
-          "on": {
-            "commands": [
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "new"
             ]
           },
           "require": {
             "in": [
               "lead",
-              "$caller.roles"
+              {
+                "var": "caller.roles"
+              }
             ]
           },
-          "message": "only a lead creates items"
+          "error": "only a lead creates items"
         },
         {
           "id": "size",
           "require": {
             "<=": [
-              "$after.estimate",
+              {
+                "var": "next.estimate"
+              },
               60
             ]
           },
-          "message": "an item is at most 60 minutes (got {$after.estimate}); split it into children with parent {$after.seq}"
+          "error": "an item is at most 60 minutes (got {next.estimate}); split it into children with parent {next.seq}"
         },
         {
           "id": "flow",
-          "on": {
-            "changes": [
-              "status"
-            ]
+          "when": {
+            "changed": "status"
           },
           "require": {
             "in": [
               {
-                "text": "{$before.status}>{$after.status}"
+                "cat": [
+                  {
+                    "var": "prev.status"
+                  },
+                  ">",
+                  {
+                    "var": "next.status"
+                  }
+                ]
               },
               [
                 "new>ready",
@@ -336,158 +352,273 @@
               ]
             ]
           },
-          "message": "status does not move from {$before.status} to {$after.status}"
+          "error": "status does not move from {prev.status} to {next.status}"
         },
         {
           "id": "lead-readies",
-          "on": {
-            "to": {
-              "status": [
-                "ready"
-              ]
-            }
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "ready"
+                ]
+              }
+            ]
           },
           "require": {
             "in": [
               "lead",
-              "$caller.roles"
+              {
+                "var": "caller.roles"
+              }
             ]
           },
-          "message": "only a lead marks an item ready"
+          "error": "only a lead marks an item ready"
         },
         {
-          "id": "take",
-          "on": {
-            "to": {
-              "status": [
-                "active"
-              ]
-            },
-            "from": {
-              "status": [
-                "ready"
-              ]
-            }
-          },
-          "set": {
-            "holder": "$caller"
-          }
-        },
-        {
-          "id": "ready-to-start",
-          "on": {
-            "to": {
-              "status": [
-                "active"
-              ]
-            }
+          "id": "holder-is-caller",
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "active"
+                ]
+              }
+            ]
           },
           "require": {
-            "condition": "dependencies-closed"
+            "===": [
+              {
+                "var": "next.holder"
+              },
+              {
+                "var": "caller.name"
+              }
+            ]
           },
-          "message": "item {$after.seq} waits for the items it depends on"
+          "error": "set yourself as holder before making item {next.seq} active"
+        },
+        {
+          "id": "dependencies",
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "active"
+                ]
+              }
+            ]
+          },
+          "require": {
+            "all": [
+              {
+                "map": [
+                  {
+                    "var": "next.depends_on"
+                  },
+                  {
+                    "item": {
+                      "var": ""
+                    }
+                  }
+                ]
+              },
+              {
+                "===": [
+                  {
+                    "var": "status"
+                  },
+                  "closed"
+                ]
+              }
+            ]
+          },
+          "error": "item {next.seq} waits for the items it depends on"
         },
         {
           "id": "one-each",
-          "on": {
-            "to": {
-              "status": [
-                "active"
-              ]
-            }
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "active"
+                ]
+              }
+            ]
           },
           "require": {
             "<=": [
               {
-                "count": {
-                  "items": "$team.items",
-                  "match": {
-                    "all": [
-                      {
-                        "is": [
-                          "$it.status",
-                          "active"
-                        ]
-                      },
-                      {
-                        "is": [
-                          "$it.holder",
-                          "$caller"
-                        ]
-                      }
-                    ]
-                  }
+                "length": {
+                  "filter": [
+                    {
+                      "var": "team.items"
+                    },
+                    {
+                      "and": [
+                        {
+                          "===": [
+                            {
+                              "var": "status"
+                            },
+                            "active"
+                          ]
+                        },
+                        {
+                          "===": [
+                            {
+                              "var": "holder"
+                            },
+                            {
+                              "outer": "caller.name"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               },
               1
             ]
           },
-          "message": "{$caller} already holds an active item"
+          "error": "{caller.name} already holds an active item"
         },
         {
-          "id": "check-needs",
-          "on": {
-            "to": {
-              "status": [
-                "checking"
-              ]
-            }
-          },
-          "require": {
-            "all": [
+          "id": "holder-locked",
+          "when": {
+            "and": [
               {
-                "not": {
-                  "empty": "$after.result"
-                }
+                "===": [
+                  {
+                    "var": "prev.status"
+                  },
+                  "active"
+                ]
               },
               {
-                "not": {
-                  "empty": "$after.checker"
-                }
-              },
-              {
-                "not": {
-                  "is": [
-                    "$after.checker",
-                    "$after.holder"
-                  ]
-                }
+                "changed": "holder"
               }
             ]
           },
-          "message": "checking needs a result and a checker other than the holder"
+          "require": false,
+          "error": "the holder of an active item does not change"
+        },
+        {
+          "id": "check-needs",
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "checking"
+                ]
+              }
+            ]
+          },
+          "require": {
+            "and": [
+              {
+                "!!": {
+                  "var": "next.result"
+                }
+              },
+              {
+                "!!": {
+                  "var": "next.checker"
+                }
+              },
+              {
+                "!==": [
+                  {
+                    "var": "next.checker"
+                  },
+                  {
+                    "var": "next.holder"
+                  }
+                ]
+              }
+            ]
+          },
+          "error": "checking needs a result and a checker other than the holder"
         },
         {
           "id": "checker-closes",
-          "on": {
-            "to": {
-              "status": [
-                "closed"
-              ]
-            }
-          },
-          "require": {
-            "is": [
-              "$caller",
-              "$after.checker"
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "closed"
+                ]
+              }
             ]
           },
-          "message": "only the checker {$after.checker} closes item {$after.seq}"
+          "require": {
+            "===": [
+              {
+                "var": "caller.name"
+              },
+              {
+                "var": "next.checker"
+              }
+            ]
+          },
+          "error": "only the checker {next.checker} closes item {next.seq}"
         },
         {
           "id": "archive-closed",
-          "on": {
-            "commands": [
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "archive"
             ]
           },
           "require": {
-            "is": [
-              "$after.status",
+            "===": [
+              {
+                "var": "next.status"
+              },
               "closed"
             ]
           },
-          "message": "only a closed item is archived"
+          "error": "only a closed item is archived"
         }
       ],
       "queue": [
@@ -495,19 +626,25 @@
           "roles": [
             "member"
           ],
-          "description": "a member checks first, then takes ready work",
+          "description": "a member's checks first",
           "match": {
-            "all": [
+            "and": [
               {
-                "is": [
-                  "$it.status",
+                "===": [
+                  {
+                    "var": "status"
+                  },
                   "checking"
                 ]
               },
               {
-                "is": [
-                  "$it.checker",
-                  "$caller"
+                "===": [
+                  {
+                    "var": "checker"
+                  },
+                  {
+                    "outer": "caller.name"
+                  }
                 ]
               }
             ]
@@ -517,30 +654,45 @@
           "roles": [
             "member"
           ],
+          "description": "then ready work whose dependencies are closed",
           "match": {
-            "all": [
+            "and": [
               {
-                "is": [
-                  "$it.status",
+                "===": [
+                  {
+                    "var": "status"
+                  },
                   "ready"
                 ]
               },
               {
-                "every": {
-                  "items": {
-                    "$items": "$it.depends_on"
+                "all": [
+                  {
+                    "map": [
+                      {
+                        "var": "depends_on"
+                      },
+                      {
+                        "item": {
+                          "var": ""
+                        }
+                      }
+                    ]
                   },
-                  "match": {
-                    "is": [
-                      "$it.status",
+                  {
+                    "===": [
+                      {
+                        "var": "status"
+                      },
                       "closed"
                     ]
                   }
-                }
+                ]
               }
             ]
           },
           "take": {
+            "holder": "$caller",
             "status": "active"
           }
         }
@@ -549,27 +701,38 @@
         "waiting": {
           "description": "Ready items that wait for a dependency.",
           "match": {
-            "all": [
+            "and": [
               {
-                "is": [
-                  "$it.status",
+                "===": [
+                  {
+                    "var": "status"
+                  },
                   "ready"
                 ]
               },
               {
-                "some": {
-                  "items": {
-                    "$items": "$it.depends_on"
+                "some": [
+                  {
+                    "map": [
+                      {
+                        "var": "depends_on"
+                      },
+                      {
+                        "item": {
+                          "var": ""
+                        }
+                      }
+                    ]
                   },
-                  "match": {
-                    "not": {
-                      "is": [
-                        "$it.status",
-                        "closed"
-                      ]
-                    }
+                  {
+                    "!==": [
+                      {
+                        "var": "status"
+                      },
+                      "closed"
+                    ]
                   }
-                }
+                ]
               }
             ]
           }
@@ -578,7 +741,7 @@
     }
   },
   "lead-and-reviewers": {
-    "description": "A lead plans and splits work; members implement; every item passes a review by a reviewer and then a second review by an outside reviewer before the lead closes it. A member can hand an item over to another member, and an item can wait for a decision of the lead.",
+    "description": "A lead plans and readies work; members implement; every item passes a review by a reviewer and then a second review by an outside reviewer before the lead closes it. The holder can hand an item to another member, and an item can wait for a decision of the lead.",
     "people": {
       "lead-1": [
         "lead"
@@ -637,12 +800,7 @@
       "review_passes": {
         "type": "number",
         "default": 0,
-        "description": "How many reviews the item has passed."
-      },
-      "handoff_to": {
-        "type": "person",
-        "default": "",
-        "description": "The member the item is handed to."
+        "description": "How many reviews the item has passed; the reviewer raises it by one when passing the item on."
       },
       "question": {
         "type": "text",
@@ -661,63 +819,63 @@
       }
     },
     "rules": {
-      "description": "See the team description. Every rule below either refuses a change with its message or sets values that follow from a change.",
-      "conditions": {
-        "lead": {
-          "in": [
-            "lead",
-            "$caller.roles"
-          ]
-        },
-        "holder": {
-          "is": [
-            "$caller",
-            "$after.holder"
-          ]
-        }
-      },
+      "description": "See the team description; each rule refuses one kind of change.",
       "rules": [
         {
           "id": 1,
           "require": {
-            "not": {
-              "empty": "$caller.roles"
+            "!!": {
+              "var": "caller.roles"
             }
           },
-          "message": "{$caller} is not a person of team {$team.name}"
+          "error": "{caller.name} is not a person of team {team.name}"
         },
         {
           "id": 2,
-          "on": {
-            "commands": [
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "new"
             ]
           },
           "require": {
-            "all": [
+            "and": [
               {
-                "condition": "lead"
+                "in": [
+                  "lead",
+                  {
+                    "var": "caller.roles"
+                  }
+                ]
               },
               {
-                "not": {
-                  "empty": "$after.done_when"
+                "!!": {
+                  "var": "next.done_when"
                 }
               }
             ]
           },
-          "message": "a lead creates an item, with --done_when"
+          "error": "a lead creates an item, with --done_when"
         },
         {
           "id": 3,
-          "on": {
-            "changes": [
-              "status"
-            ]
+          "when": {
+            "changed": "status"
           },
           "require": {
             "in": [
               {
-                "text": "{$before.status}>{$after.status}"
+                "cat": [
+                  {
+                    "var": "prev.status"
+                  },
+                  ">",
+                  {
+                    "var": "next.status"
+                  }
+                ]
               },
               [
                 "new>ready",
@@ -732,259 +890,387 @@
               ]
             ]
           },
-          "message": "status does not move from {$before.status} to {$after.status}"
+          "error": "status does not move from {prev.status} to {next.status}"
         },
         {
           "id": 4,
-          "on": {
-            "to": {
-              "status": [
-                "ready",
-                "closed"
-              ]
-            }
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "in": [
+                  {
+                    "var": "next.status"
+                  },
+                  [
+                    "ready",
+                    "closed"
+                  ]
+                ]
+              }
+            ]
           },
           "require": {
-            "condition": "lead"
+            "in": [
+              "lead",
+              {
+                "var": "caller.roles"
+              }
+            ]
           },
-          "message": "only a lead marks an item {$after.status}"
+          "error": "only a lead marks an item {next.status}"
         },
         {
           "id": 5,
-          "on": {
-            "from": {
-              "status": [
-                "ready"
-              ]
-            },
-            "to": {
-              "status": [
-                "active"
-              ]
-            }
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "active"
+                ]
+              }
+            ]
           },
-          "set": {
-            "holder": "$caller"
-          }
+          "require": {
+            "and": [
+              {
+                "===": [
+                  {
+                    "var": "next.holder"
+                  },
+                  {
+                    "var": "caller.name"
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "map": [
+                      {
+                        "var": "next.depends_on"
+                      },
+                      {
+                        "item": {
+                          "var": ""
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "===": [
+                      {
+                        "var": "status"
+                      },
+                      "closed"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "error": "the holder makes item {next.seq} active, once its dependencies are closed"
         },
         {
           "id": 6,
-          "on": {
-            "to": {
-              "status": [
-                "active"
-              ]
-            }
-          },
-          "require": {
-            "every": {
-              "items": {
-                "$items": "$after.depends_on"
+          "when": {
+            "and": [
+              {
+                "changed": "status"
               },
-              "match": {
-                "is": [
-                  "$it.status",
-                  "closed"
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "review"
                 ]
               }
-            }
-          },
-          "message": "item {$after.seq} waits for its dependencies"
-        },
-        {
-          "id": 7,
-          "on": {
-            "to": {
-              "status": [
-                "review"
-              ]
-            }
+            ]
           },
           "require": {
-            "all": [
+            "and": [
               {
-                "condition": "holder"
+                "===": [
+                  {
+                    "var": "caller.name"
+                  },
+                  {
+                    "var": "next.holder"
+                  }
+                ]
               },
               {
-                "not": {
-                  "empty": "$after.result"
+                "!!": {
+                  "var": "next.result"
                 }
               },
               {
                 "in": [
                   "reviewer",
                   {
-                    "roles_of": "$after.reviewer"
+                    "roles_of": {
+                      "var": "next.reviewer"
+                    }
                   }
                 ]
               }
             ]
           },
-          "message": "the holder asks for review with a result and a reviewer"
+          "error": "the holder asks for review with a result and a reviewer"
         },
         {
-          "id": 8,
-          "on": {
-            "to": {
-              "status": [
-                "second-review"
-              ]
-            }
+          "id": 7,
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "second-review"
+                ]
+              }
+            ]
           },
           "require": {
-            "all": [
+            "and": [
               {
-                "is": [
-                  "$caller",
-                  "$before.reviewer"
+                "===": [
+                  {
+                    "var": "caller.name"
+                  },
+                  {
+                    "var": "prev.reviewer"
+                  }
                 ]
               },
               {
                 "in": [
                   "outside-reviewer",
                   {
-                    "roles_of": "$after.reviewer"
+                    "roles_of": {
+                      "var": "next.reviewer"
+                    }
+                  }
+                ]
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.review_passes"
+                  },
+                  {
+                    "+": [
+                      {
+                        "var": "prev.review_passes"
+                      },
+                      1
+                    ]
                   }
                 ]
               }
             ]
           },
-          "message": "the reviewer passes the item to an outside reviewer"
+          "error": "the reviewer passes the item to an outside reviewer and counts the pass"
         },
         {
-          "id": 9,
-          "on": {
-            "from": {
-              "status": [
-                "review",
-                "second-review"
-              ]
-            },
-            "to": {
-              "status": [
-                "second-review",
-                "closed"
-              ]
-            }
-          },
-          "set": {
-            "review_passes": {
-              "plus": [
-                "$before.review_passes",
-                1
-              ]
-            }
-          }
-        },
-        {
-          "id": 10,
-          "on": {
-            "to": {
-              "status": [
-                "closed"
-              ]
-            }
+          "id": 8,
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "closed"
+                ]
+              }
+            ]
           },
           "require": {
             ">=": [
-              "$after.review_passes",
+              {
+                "var": "next.review_passes"
+              },
               2
             ]
           },
-          "message": "an item closes after two reviews (passed {$after.review_passes})"
+          "error": "an item closes after two reviews (passed {next.review_passes})"
         },
         {
-          "id": 11,
-          "on": {
-            "changes": [
-              "handoff_to"
+          "id": 9,
+          "when": {
+            "changed": "review_passes"
+          },
+          "require": {
+            "and": [
+              {
+                "in": [
+                  {
+                    "var": "next.status"
+                  },
+                  [
+                    "second-review",
+                    "closed"
+                  ]
+                ]
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.review_passes"
+                  },
+                  {
+                    "+": [
+                      {
+                        "var": "prev.review_passes"
+                      },
+                      1
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "error": "review passes rise by one, when a review is passed"
+        },
+        {
+          "id": 10,
+          "when": {
+            "and": [
+              {
+                "changed": "holder"
+              },
+              {
+                "!!": {
+                  "var": "prev.holder"
+                }
+              }
             ]
           },
           "require": {
-            "all": [
+            "and": [
               {
-                "is": [
-                  "$caller",
-                  "$before.holder"
+                "===": [
+                  {
+                    "var": "caller.name"
+                  },
+                  {
+                    "var": "prev.holder"
+                  }
                 ]
               },
               {
                 "in": [
                   "member",
                   {
-                    "roles_of": "$after.handoff_to"
+                    "roles_of": {
+                      "var": "next.holder"
+                    }
                   }
                 ]
               }
             ]
           },
-          "message": "the holder hands an item to another member"
+          "error": "only the holder hands an item to another member"
+        },
+        {
+          "id": 11,
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "next.status"
+                  },
+                  "waiting"
+                ]
+              }
+            ]
+          },
+          "require": {
+            "!!": {
+              "var": "next.question"
+            }
+          },
+          "error": "an item waits with the question it waits for"
         },
         {
           "id": 12,
-          "on": {
-            "changes": [
-              "handoff_to"
+          "when": {
+            "and": [
+              {
+                "changed": "status"
+              },
+              {
+                "===": [
+                  {
+                    "var": "prev.status"
+                  },
+                  "waiting"
+                ]
+              }
             ]
           },
-          "set": {
-            "holder": "$after.handoff_to"
-          }
+          "require": {
+            "in": [
+              "lead",
+              {
+                "var": "caller.roles"
+              }
+            ]
+          },
+          "error": "only a lead answers the question of a waiting item"
         },
         {
           "id": 13,
-          "on": {
-            "to": {
-              "status": [
-                "waiting"
-              ]
-            }
-          },
-          "require": {
-            "not": {
-              "empty": "$after.question"
-            }
-          },
-          "message": "an item waits with the question it waits for"
-        },
-        {
-          "id": 14,
-          "on": {
-            "from": {
-              "status": [
-                "waiting"
-              ]
-            }
-          },
-          "require": {
-            "condition": "lead"
-          },
-          "message": "only a lead answers the question of a waiting item"
-        },
-        {
-          "id": 15,
           "require": {
             "<=": [
-              "$after.estimate",
+              {
+                "var": "next.estimate"
+              },
               90
             ]
           },
-          "message": "an item is at most 90 minutes (got {$after.estimate})"
+          "error": "an item is at most 90 minutes (got {next.estimate})"
         },
         {
-          "id": 16,
-          "on": {
-            "commands": [
+          "id": 14,
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "archive"
             ]
           },
           "require": {
-            "is": [
-              "$after.status",
+            "===": [
+              {
+                "var": "next.status"
+              },
               "closed"
             ]
           },
-          "message": "only a closed item is archived"
+          "error": "only a closed item is archived"
         }
       ],
       "queue": [
@@ -993,12 +1279,14 @@
             "reviewer",
             "outside-reviewer"
           ],
-          "description": "a reviewer takes what waits for its review",
+          "description": "a reviewer's items first",
           "match": {
-            "all": [
+            "and": [
               {
                 "in": [
-                  "$it.status",
+                  {
+                    "var": "status"
+                  },
                   [
                     "review",
                     "second-review"
@@ -1006,9 +1294,13 @@
                 ]
               },
               {
-                "is": [
-                  "$it.reviewer",
-                  "$caller"
+                "===": [
+                  {
+                    "var": "reviewer"
+                  },
+                  {
+                    "outer": "caller.name"
+                  }
                 ]
               }
             ]
@@ -1020,12 +1312,15 @@
           ],
           "description": "a member takes ready work",
           "match": {
-            "is": [
-              "$it.status",
+            "===": [
+              {
+                "var": "status"
+              },
               "ready"
             ]
           },
           "take": {
+            "holder": "$caller",
             "status": "active"
           }
         },
@@ -1033,10 +1328,12 @@
           "roles": [
             "lead"
           ],
-          "description": "the lead answers waiting items first, then readies new ones",
+          "description": "the lead answers waiting items, then readies new ones",
           "match": {
             "in": [
-              "$it.status",
+              {
+                "var": "status"
+              },
               [
                 "waiting",
                 "new"
@@ -1049,8 +1346,10 @@
         "decisions": {
           "description": "Items waiting for the lead.",
           "match": {
-            "is": [
-              "$it.status",
+            "===": [
+              {
+                "var": "status"
+              },
               "waiting"
             ]
           }
@@ -1059,7 +1358,9 @@
           "description": "Items in either review.",
           "match": {
             "in": [
-              "$it.status",
+              {
+                "var": "status"
+              },
               [
                 "review",
                 "second-review"

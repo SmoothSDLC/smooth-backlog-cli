@@ -32,8 +32,8 @@ There are two sets of commands, never aliases of each other:
 | Item definition | The list of fields an item has beyond the base properties, with their types, defaults and allowed values (3.2). |
 | Team | A named group of people with its own item definition and rule set, held in the team file (3.3). |
 | Change | What a team command would do to one item: the item before and the item after (team rules spec, 2). |
-| Rule | One requirement (what must hold for a change, with the error text) or one derivation (what a change sets by itself). Every rule of a team is evaluated on every change; no command names a rule (decision 53). |
-| Rule set | A team's rules, named conditions, queue and filters (3.3, [team-rules-spec.md](team-rules-spec.md)). |
+| Rule | A guard: when a condition holds for a change, another must hold too, or the change is refused with the rule's error text. Every rule of a team is evaluated on every change; no command names a rule and no rule sets a value (decisions 53 and 58 to 59). |
+| Rule set | A team's rules, queue and filters (3.3, [team-rules-spec.md](team-rules-spec.md)). |
 | Priority | The place of an item in its branch's list in the index, written `p0`, `p1`, ... (4.2). |
 | Index | The file that holds the priority order of each branch (3.5). |
 | Backlog location | The git repository that holds the items: the current repository, or one outside it (4.1). |
@@ -73,7 +73,7 @@ There are three places a definition comes from: the `item` of a team in the team
 
 The team file holds one entry per team, each with `people` (each person with a list of role words), `item` (the team item definition, 3.2) and `rules`. Its location is named in the configuration (`teams_file`; default `.backlog/teams.json`). The CLI only reads it (ruling R5).
 
-`rules` is the team's rule set. Its form is [team-rules.schema.json](team-rules.schema.json) and its meaning is [team-rules-spec.md](team-rules-spec.md): what triggers the rules, how a change is evaluated, each kind of rule with examples (transition, field, permission, derivation, relation, creation), conditions and values, how rules affect each other and how a dependency between rules is declared, the queue and filters, error texts, and the validation of the rules. Each team may carry a `description` of its way of working in words (decision 56).
+`rules` is the team's rule set. Its form is [team-rules.schema.json](team-rules.schema.json) and its meaning is [team-rules-spec.md](team-rules-spec.md): what triggers the rules, how a change is evaluated, the guard form of a rule (`when`, `require`, `error`), the evaluation context (`prev`, `next`, `caller`, `team`, ...), conditions in JsonLogic evaluated by json-logic-js, each kind of rule with examples (transition, field, lock, permission, relation, creation), how rules relate through fields, the queue and filters, error texts, and the validation of the rules. Each team may carry a `description` of its way of working in words (decision 56).
 
 ### 3.4 The configuration: [config.schema.json](config.schema.json)
 
@@ -100,8 +100,8 @@ Per branch, the list of the open items in priority order: number, slug, title an
 Shipped with the CLI in the public repository (decision 35) and valid against 3.3. Three teams:
 
 - `simple`: one agent; status todo, doing, done; an estimate and a result; six rules (people only, size on creation, the allowed moves of status, one item doing, done needs a result, archive only done); the queue takes the next todo item.
-- `advanced`: a lead and three members; status new, ready, active, checking, closed; holder, checker, parent, dependencies; eleven rules, among them a derivation (becoming active makes the caller the holder), a named condition (dependencies closed), a relation rule (one active item per member) and permission rules; the queue gives a member its checks first, then ready work.
-- `lead-and-reviewers`: a lead, members, a reviewer and an outside reviewer; two reviews counted by a derivation, hand-off between members (a derivation moves the holder), waiting for a decision of the lead; sixteen rules; the queue serves reviewers, members and the lead.
+- `advanced`: a lead and three members; status new, ready, active, checking, closed; holder, checker, parent, dependencies; twelve rules, among them permission rules, a relation rule over the dependencies, a rule counting a member's active items, and a lock on the holder of an active item; the queue gives a member its checks first, then takes ready work for it (setting holder and status in one change).
+- `lead-and-reviewers`: a lead, members, a reviewer and an outside reviewer; two reviews counted in a field the reviewer raises, hand-off by the holder, waiting for a decision of the lead; fourteen rules; the queue serves reviewers, members and the lead.
 
 Each team's `description` says its way of working in words. The examples guide (plan, task 12) explains every rule, and shows for each the change it allows and the change it refuses with its text.
 
@@ -140,7 +140,7 @@ Every change adds one entry to the item's history (3.1), written by the CLI. A c
 
 ### 4.6 How a team command applies the rules
 
-Every team command that would change an item builds the change (the item before and after) and evaluates it: first the structure (schema and team item definition), then every derivation in the order of their dependencies, then every requirement. If all requirements hold, the change is written with one history entry; otherwise nothing is written, exit 1, and every failing rule's text is returned. `--whatif` evaluates and writes nothing. The full specification is [team-rules-spec.md](team-rules-spec.md).
+Every team command that would change an item builds the change (`prev` and `next`) and evaluates it: first the structure (schema and team item definition, checked with Ajv), then every rule (with json-logic-js). If every rule holds, the change is written with one history entry; otherwise nothing is written, exit 1, and every failing rule's text is returned. `--whatif` evaluates and writes nothing. The full specification is [team-rules-spec.md](team-rules-spec.md).
 
 ### 4.7 Inputs and environment variables
 

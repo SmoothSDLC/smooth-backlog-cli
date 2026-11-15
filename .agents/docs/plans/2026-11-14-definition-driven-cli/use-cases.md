@@ -109,13 +109,14 @@ Each use case is one scenario: the situation, the command as typed, and what mus
 - *T-RULE-1. Every rule is evaluated on every change: `backlog team update 7 estimate 90` on a ready item fails rule `size` (at most 60) although the status does not change.
 - *T-RULE-2. Transition: `backlog team update 7 status closed` on an `active` item fails rule `flow` with "status does not move from active to closed".
 - *T-RULE-3. Several failures: a change that fails two requirements returns both messages, in JSON `{"refused": [...]}`, and with `--human` one line each.
-- *T-RULE-4. Derivation: `backlog team update 7 status active --agent member-2` on a ready item whose dependencies are closed sets `holder` to member-2; the history entry lists `status` and `holder`.
-- *T-RULE-5. Requirements see derivations: member-2 already holds an active item; the same change fails rule `one-each`, and nothing is written, `holder` included.
-- *T-RULE-6. Named condition: an item with a dependency not closed fails rule `ready-to-start` with "item 7 waits for the items it depends on".
+- *T-RULE-4. Guard on the caller's own value: `backlog team update 3 status active --agent member-2` on a ready item whose holder is not member-2 fails rule `holder-is-caller`; after `backlog team update 3 holder member-2 --agent member-2`, the same status change passes.
+- *T-RULE-5. Rules relate only through fields: no rule sets a value; the history entry of a change lists only the properties the caller changed.
+- *T-RULE-6. Relation: an item with a dependency not closed fails rule `dependencies` with "item 3 waits for the items it depends on".
 - *T-RULE-7. Permission: `backlog team update 7 status closed --agent member-1` when member-1 is not the checker fails rule `checker-closes`.
 - *T-RULE-8. No rule is named by a caller: there is no command or flag that takes a rule id or a step.
-- *T-RULE-9. Validation finds: a rule reading an undeclared field; a value of `to` not in the field's `values`; two derivations setting `holder` to different literals on the same trigger; a cycle of derivations; a cycle of named conditions; a message reading an unknown value. Each is reported with the team, the rule's id or place, the reason and the fix, and the whole team file is invalid.
-- *T-RULE-10. With `--whatif` a change is evaluated, derivations shown, and nothing written.
+- *T-RULE-9. Validation finds: a rule reading an undeclared field; a literal compared with a field that is not one of its `values`; an unknown operator; a rule whose `require` cannot hold under its own `when`; two rules on the same transition requiring one field to equal two different literals; an `error` reading an unknown path; `==` or `!=` (a warning). Each is reported with the team, the rule's id or place, the reason and the fix, and the whole team file is invalid.
+- *T-RULE-10. With `--whatif` a change is evaluated and nothing written.
+- *T-RULE-11. The rules of `teams.example.json` give, through json-logic-js with the extra operators, the results the examples guide states for each team (a test runs them).
 
 ### `backlog team pop`, `query`, `validate`, `migrate`
 - *T-POP-1. `backlog team pop --team web --agent member-1`: for the first queue entry of the member's roles that has a matching item, the first such item in priority order is offered; with `take`, the item is changed with those values and every rule applies; a refused item is skipped for the next.

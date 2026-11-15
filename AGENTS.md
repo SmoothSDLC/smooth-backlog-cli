@@ -1,6 +1,6 @@
 # smooth-backlog-cli
 
-This is a dependency-free Node.js 24+ CLI, licensed under Apache-2.0.
+This is a Node.js 24+ CLI that uses widely used libraries where they do the job (for example Ajv for JSON Schema and json-logic-js for team rules) instead of building its own, licensed under Apache-2.0.
 
 - Public package documentation belongs in README.md, COMMANDS.md, and CHANGELOG.md.
 - Development specifications and notes belong in .agents/docs/. Documents that no longer describe the target are in .backlog/archived/: never read them as a specification or a plan.

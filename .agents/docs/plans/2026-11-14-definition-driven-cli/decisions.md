@@ -67,6 +67,19 @@ The owner's decisions that are in force for this branch, each in its current wor
 56. The steps a team goes through are not part of the rule format and not known to the CLI. How the rules shape a team's way of working is described in words beside the rules, not prescribed by the structure of the rules.
 57. Before any plan is built, the rule specification is written and codified: how a rule is written in JSON, its keywords and data structures for each kind of rule, how a change of a field triggers one or several rules, how one rule affects another, how a dependency between two rules is declared, how the error text is given, the order and hierarchy of evaluation, and the validation of the rules. A JSON Schema of the rules goes with it. The specification, the item specification and the schemas follow it.
 
+## Lead decisions of 2026-11-15, from a review the owner obtained and asked to integrate where it fits
+
+The owner had his round-13 message reviewed by another AI and asked the lead to integrate what is correct and does not conflict with the established behaviour. The lead adopted these; each is reversible on the owner's word.
+
+58. A rule is a guard clause: optional `id` and `description`, an optional `when` (a condition; absent means every change), a `require` (a condition that must hold when `when` holds), and an `error` (the text the caller sees). Every rule is evaluated against the change; all failing rules' errors are returned together.
+59. No rule sets a value and no rule calls another. Rules depend on each other only through the fields of the item: one rule protects a field's value, another reads that value. There are no derivations and no named conditions. A value a team wants set (for example the holder) is set by the caller's change, and a rule requires it.
+60. Conditions are written in JsonLogic syntax, reading the change through `var` (`prev.status`, `next.status`, `caller.roles`, ...), with a small documented set of extra operators for what JsonLogic lacks.
+61. The key of the error text is `error`.
+
+## Owner decision of 2026-11-15, on libraries
+
+62. Where a widely used and safe external library does the job, the CLI uses it instead of building its own; building it in the CLI is not allowed then. "Dependency-free" was never a rule that forbids runtime libraries. For this branch: Ajv (with ajv-formats) validates JSON against the schemas, and json-logic-js evaluates the conditions of the team rules; a regular-expression library that matches in linear time is chosen in plan task 9a.
+
 ## Owner rulings of 2026-11-09 that remain in force
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.

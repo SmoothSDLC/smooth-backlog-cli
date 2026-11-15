@@ -27,23 +27,29 @@
         {
           "id": 1,
           "require": {
-            "not": {
-              "empty": "$caller.roles"
+            "!!": {
+              "var": "caller.roles"
             }
           },
-          "message": "{$caller} is not a person of team {$team.name}"
+          "error": "{caller.name} is not a person of team {team.name}"
         },
         {
           "id": 2,
-          "on": {
-            "changes": [
-              "status"
-            ]
+          "when": {
+            "changed": "status"
           },
           "require": {
             "in": [
               {
-                "text": "{$before.status}>{$after.status}"
+                "cat": [
+                  {
+                    "var": "prev.status"
+                  },
+                  ">",
+                  {
+                    "var": "next.status"
+                  }
+                ]
               },
               [
                 "new>active",
@@ -51,29 +57,36 @@
               ]
             ]
           },
-          "message": "status does not move from {$before.status} to {$after.status}"
+          "error": "status does not move from {prev.status} to {next.status}"
         },
         {
           "id": 3,
-          "on": {
-            "commands": [
+          "when": {
+            "===": [
+              {
+                "var": "command"
+              },
               "archive"
             ]
           },
           "require": {
-            "is": [
-              "$after.status",
+            "===": [
+              {
+                "var": "next.status"
+              },
               "closed"
             ]
           },
-          "message": "only a closed item is archived"
+          "error": "only a closed item is archived"
         }
       ],
       "queue": [
         {
           "match": {
-            "is": [
-              "$it.status",
+            "===": [
+              {
+                "var": "status"
+              },
               "new"
             ]
           },
@@ -86,8 +99,10 @@
         "active": {
           "description": "Items being worked on.",
           "match": {
-            "is": [
-              "$it.status",
+            "===": [
+              {
+                "var": "status"
+              },
               "active"
             ]
           }

@@ -36,4 +36,5 @@ Decisions that are no longer in force, with what replaced them. Nothing here des
 | `backlog team migrate` and `backlog upgrade` as separate ways to bring a backlog up to date | 2026-11-09 | decision 48 makes `backlog upgrade` the way; see the specification |
 | A rule of the table is chosen by a `step` word; `backlog team update <item> <step>`; the pop table names steps; `backlog team query check <item> <step>` and `query steps` (design of 2026-11-09, never approved by the owner) | 2026-11-09 | decisions 53 to 56 |
 | Rules carry a required `id` and are matched in table order, the first match deciding (ruling R10 as built) | 2026-11-09 | decisions 53 and 55: every rule is evaluated on every change and rules must not contradict; ruling R10's ordered table stays only where the rule specification keeps an order |
-
+| Rules with `on` triggers, `require` with `message`, derivations with `set`, named `conditions`, and a condition language of its own (team-rules-spec.md of 2026-11-15, first version) | 2026-11-15 | decisions 58 to 61 |
+| The CLI is dependency-free (AGENTS.md since 2026-10-17) and has its own expression evaluator, pattern matcher and schema checks (built 2026-11-10) | 2026-10-17, 2026-11-10 | decision 62 |

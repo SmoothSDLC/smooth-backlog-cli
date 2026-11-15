@@ -80,6 +80,25 @@ The owner had his round-13 message reviewed by another AI and asked the lead to 
 
 62. Where a widely used and safe external library does the job, the CLI uses it instead of building its own; building it in the CLI is not allowed then. "Dependency-free" was never a rule that forbids runtime libraries. For this branch: Ajv (with ajv-formats) validates JSON against the schemas, and json-logic-js evaluates the conditions of the team rules; a regular-expression library that matches in linear time is chosen in plan task 9a.
 
+## Owner decision of 2026-11-15, on approval
+
+63. There is no approval or review step for the owner. The owner works only through the chat; his go in the chat is the approval, and the documents never say "not approved". A document is incomplete when it depends on a decision the lead cannot take from the owner's earlier decisions; the lead then presents that decision in the same reply as the document, as a blocker of the document, and the document names where the open decisions are.
+
+## Lead decisions of 2026-11-15, taken from the owner's earlier decisions
+
+64. The packaged default item definition declares `status` alone (new, active, closed; closed final; new by default): decisions 18, 25 and 47.
+65. A user command checks that a property is declared and that its value has the field's type; it does not hold the value to the field's `values`: owner principle of 2026-11-08 (a user sets any status word on an item with no team).
+66. The key names `item_definition`, `archive_folder`, `repository_variable`, `branch_variable`, `team_variable`, `agent_variable`, `session_variable`, `redaction_patterns` (each pattern `find` and `replace`) and the history key `command`: the owner leaves names to the lead (owner instruction of 2026-11-07 on not asking what the lead can decide).
+67. Every user command that reads or changes items has its team form, `archive done`, `import`, `branch` and `branch import` included: decision 38 ("most of the user commands") and the parity it asks for.
+68. The third example team of `teams.example.json` is written in plan task 12 as a simplified, generically named version of the owner's actual Cody team file of decision 36, so that it follows the owner's workflow without revealing it: decisions 35 and 36 and the rule on public repositories.
+69. An item is named in a command by its number (`12`), its slug, or its priority (`p0`): decision 43 (the prefix exists so that the two can be told apart where either is referenced).
+70. A command that would change the backlog where the backlog location is not a git repository refuses with exit 4 and names `backlog setup`: decision 44 and the meaning of exit 4 (not set up).
+71. `backlog archive <item> --show-all` archives an item of a team without rules, as `backlog update` does: decision 29.
+72. The two ways out of an unreadable item (decision F of 2026-11-04) stay: setting the field again (`backlog update <item> <property> <value>`), or `backlog update <item> restore` (the previous version); an item whose number cannot be read takes `backlog update <slug> seq <n>`. `restore` is a subcommand because it carries no data (owner rule of 2026-11-07 on flags and subcommands).
+73. The configuration key `push-backlog-updates` goes: decision 44 says every change is committed and pushed.
+74. `backlog import <branch>` and `backlog branch import <branch>` do the same thing: decision 41 keeps both, and the first description of 2026-10-15 named the second.
+75. Regular expressions in rules are matched by the `re2` package (bindings to Google's RE2, which matches in linear time): decision 62.
+
 ## Owner rulings of 2026-11-09 that remain in force
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.

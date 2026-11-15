@@ -1,6 +1,6 @@
 {
   "seq": 1,
-  "slug": "1-add-the-login-form",
+  "slug": "001-add-the-login-form",
   "title": "Add the login form",
   "description": "People can sign in with their e-mail address and a password.",
   "repository": "acme/app",

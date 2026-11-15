@@ -41,6 +41,7 @@ Each use case is one scenario: the situation, the command as typed, and what mus
 - *U-UPD-9. With `--whatif` it says what would change; nothing written.
 - U-UPD-10. Given someone else changed item 12 since the caller read it: exit 5 and the item as it is now.
 - *U-UPD-11. `backlog update 12 --status closed`, `--claim x`, `--append "..."` or `--section ...`: exit 2, no such option.
+- *U-UPD-13. Given item 12 cannot be read: `backlog show 12` exits 2 naming the property; `backlog update 12 restore` brings back its previous version; `backlog update 012-fix-login seq 12` repairs an unreadable number.
 - *U-UPD-12. `backlog update p0 title "X"` changes the item at priority 0; `backlog update 0 title "X"` is refused because no item has number 0.
 
 ### `backlog list` and `backlog show <item>` (4.2, 4.8)
@@ -58,6 +59,7 @@ Each use case is one scenario: the situation, the command as typed, and what mus
 - *U-ARCH-1. `backlog archive 12` moves the item into `archive_folder`, keeps its status, takes it out of the index; its number is never given again.
 - *U-ARCH-2. With `--whatif` it says what would be archived; nothing moves.
 - *U-ARCH-3. Given item 20 belongs to a team: `backlog archive 20` exits 1 naming `backlog team archive`.
+- *U-ARCH-5. `backlog archive 20 --show-all` archives an item of a team without rules.
 - U-ARCH-4. `backlog archive done` archives every item of the branch whose status is a final value of its definition.
 
 ### `backlog import` and `backlog branch` (5.1)

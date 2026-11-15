@@ -1,6 +1,6 @@
 # Team rules: specification of the rules engine
 
-Status: written 2026-11-15 from the owner's decisions 53 to 57 and the lead's decisions 58 to 61 ([decisions.md](decisions.md)); not yet approved by the owner. Its JSON Schema is [team-rules.schema.json](team-rules.schema.json); the team file ([team-file.schema.json](team-file.schema.json)) holds one rule set per team. Examples: [teams.example.json](teams.example.json), [default-team.json](default-team.json).
+Status: written 2026-11-15 from the owner's decisions 53 to 57 and the lead's decisions 58 to 61 ([decisions.md](decisions.md)). It is complete: no decision it depends on is open. Its JSON Schema is [team-rules.schema.json](team-rules.schema.json); the team file ([team-file.schema.json](team-file.schema.json)) holds one rule set per team. Examples: [teams.example.json](teams.example.json), [default-team.json](default-team.json).
 
 ## Contents
 
@@ -85,7 +85,7 @@ Extra operators, for what JsonLogic lacks, added to the library with its `add_op
 | `item` | `{"item": number}` | the open or archived item of the team with that number, or `null` |
 | `length` | `{"length": list or text}` | the number of elements or characters; with `filter`, how many elements satisfy a condition: `{"length": {"filter": [list, condition]}}` |
 | `roles_of` | `{"roles_of": person}` | the role words of a person of the team, or an empty list |
-| `regex` | `{"regex": [text, pattern]}` | true when the text matches; patterns are matched in linear time by a library chosen in plan task 9a |
+| `regex` | `{"regex": [text, pattern]}` | true when the text matches; patterns are matched in linear time by the `re2` package (decision 75) |
 | `age` | `{"age": time}` | seconds from the time to `now` |
 | `outer` | `{"outer": "next.holder"}` | inside `map`, `filter`, `reduce`, `all`, `some` or `none`, where `var` reads the element, reads a path of the whole context |
 

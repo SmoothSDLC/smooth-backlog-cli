@@ -13,10 +13,6 @@
       "type": "string",
       "description": "Address from which backlog setup clones a separate backlog repository."
     },
-    "push-backlog-updates": {
-      "type": "boolean",
-      "description": "false stops the push of backlog commits made inside the repository."
-    },
     "user": {
       "type": "string",
       "description": "The person who uses the user commands, written by backlog setup."

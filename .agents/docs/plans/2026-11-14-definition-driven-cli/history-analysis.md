@@ -109,7 +109,7 @@ All 335 commits were read by their record (the subject line of each); the code o
 
 Revised 2026-11-15 after decisions 53 to 62: the rule language, the step evaluator, the pop table of steps, the step argument parser and `query check` and `query steps` moved from IN FORCE to ARCHIVED BEHAVIOUR, as marked in their rows.
 
-Two points are QUESTION, both already recorded for the owner: whether two processes in one local copy take turns, and what happens to a value whose field the applicable definition does not declare.
+Two points are QUESTION; they are decisions A and D of section 8 of behaviour-spec.md: whether two processes in one local copy take turns, and what happens to a value whose field the applicable definition does not declare.
 
 ARCHIVED BEHAVIOUR, documented here only: the aliases of earlier command names; `backlog team define` and `backlog team workflow`; editing a section by lines; `backlog history`; `backlog new --show-all`; old keys read forever; the bridge for the coded team workflow; a storage location that is never a default.
 

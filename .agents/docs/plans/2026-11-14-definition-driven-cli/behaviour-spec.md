@@ -1,17 +1,19 @@
 # Behaviour specification of the CLI
 
-Status: the target behaviour of the CLI when the simplify branch is finished. Written 2026-11-14, restructured 2026-11-15 from the owner's decisions ([decisions.md](decisions.md); what they replaced is in [superseded-decisions.md](superseded-decisions.md)). Not yet approved by the owner. Every command and use is a use case in [use-cases.md](use-cases.md); the work to reach this is [the plan](../2026-11-14-definition-driven-cli.md). Section 8 lists everything the schemas define or the code does that this document does not yet describe; until that table is empty, this specification is incomplete.
+Status: the behaviour of the CLI when the simplify branch is finished. Written 2026-11-14, restructured 2026-11-15 from the owner's decisions ([decisions.md](decisions.md); what they replaced is in [superseded-decisions.md](superseded-decisions.md)). The team rules are specified in [team-rules-spec.md](team-rules-spec.md). Every command and use is a use case in [use-cases.md](use-cases.md); the work to reach this is [the plan](../2026-11-14-definition-driven-cli.md).
+
+**This specification is incomplete until the four decisions of section 8 are taken.** Each is presented to the owner with its options; the sections they affect say so where they do.
 
 ## Contents
 
 1. [The pattern](#1-the-pattern)
 2. [Terms](#2-terms)
 3. [Schemas](#3-schemas) (the team rules have their own specification, [team-rules-spec.md](team-rules-spec.md), and schema, [team-rules.schema.json](team-rules.schema.json)): 3.1 the base item, 3.2 the item definition, 3.3 the team file and the rule set, 3.4 the configuration, 3.5 the index, 3.6 the example team file, 3.7 the packaged defaults
-4. [Behaviour](#4-behaviour): 4.1 the backlog location, 4.2 numbers, slugs and priority, 4.3 the definition that applies, 4.4 history, 4.5 validation, 4.6 how a team command applies the rules, 4.7 inputs and environment variables, 4.8 output and exit codes, 4.9 redaction, 4.10 two writers, 4.11 setup, 4.12 upgrade
+4. [Behaviour](#4-behaviour): 4.1 the backlog location, 4.2 numbers, slugs and priority, 4.3 the definition that applies, 4.4 history, 4.5 validation, 4.6 how a team command applies the rules, 4.7 inputs and environment variables, 4.8 output and exit codes, 4.9 redaction, 4.10 two writers, 4.11 setup, 4.12 upgrade, 4.13 storage and local state, 4.14 other behaviour
 5. [Commands](#5-commands): 5.1 user commands, 5.2 team commands, 5.3 removed commands
 6. [The owner's team file](#6-the-owners-team-file)
-7. [Choices the lead made, for the owner to confirm](#7-choices-the-lead-made-for-the-owner-to-confirm)
-8. [What the schemas or the code define and this document does not yet describe](#8-what-the-schemas-or-the-code-define-and-this-document-does-not-yet-describe)
+7. [Decisions the lead took from earlier decisions](#7-decisions-the-lead-took-from-earlier-decisions)
+8. [Open decisions that block this specification](#8-open-decisions-that-block-this-specification)
 
 ## 1. The pattern
 
@@ -81,7 +83,6 @@ The team file holds one entry per team, each with `people` (each person with a l
 |---|---|
 | `backlog_repository` | The folder that holds the items, relative to the repository; `.backlog` when they live inside it. |
 | `backlog_origin_url` | The address `backlog setup` clones a separate backlog repository from. |
-| `push-backlog-updates` | On the branch today, false stops the push. It conflicts with decision 44 (section 8). |
 | `user` | The person of the user commands, written by `backlog setup` (git `user.name`, else the login name). |
 | `team` | The team a team command acts for when neither flag nor variable names one. |
 | `teams_file`, `teams_file_sha` | Where the team file is, and its SHA when last validated. |
@@ -165,7 +166,7 @@ When `redact_pii` is true, each pattern of `redaction_patterns` is applied to th
 
 ### 4.10 Two writers
 
-A change to an item that someone else changed since the caller last read it is refused with exit 5. Whether two commands running at the same moment in one local copy of the backlog take turns is waiting for the owner (section 7, choice 6).
+A change to an item that someone else changed since the caller last read it is refused with exit 5. Whether two commands running at the same moment in one local copy of the backlog take turns is open: section 8, decision A.
 
 ### 4.11 Setup
 
@@ -181,7 +182,7 @@ A change to an item that someone else changed since the caller last read it is r
 
 ### 4.12 Upgrade
 
-`backlog upgrade` installs the latest release of the CLI (`check`, `auto`, `off`, `disable` and `<version>` control the update notice and the version; answer AI of 2026-11-07), then converts every item of the repository's backlog to the running version and records `cli_version` (decision 48).
+`backlog upgrade` installs the latest release of the CLI (`check`, `auto`, `off`, `disable` and `<version>` control the update notice and the version; answer AI of 2026-11-07), then converts every item of the repository's backlog to the running version and records `cli_version` (decision 48). What it does with a value in a field the definition that applies does not declare is open: section 8, decision D. Whether `backlog team migrate` becomes part of it is open: section 8, decision C.
 
 ## 5. Commands
 
@@ -194,10 +195,10 @@ A change to an item that someone else changed since the caller last read it is r
 | `backlog` | | *(none): prints the help | |
 | `backlog setup` | `--ask`, *`--whatif` | | |
 | `backlog new` | *`--title <text>`, *`--description <text>`, `--ask`, *`--whatif`, `--json` | *`--file <item.json>` (an item that fits 3.1) | *`--whatif`, `--json` |
-| *`backlog update <item>` | *`--whatif`, `--json`, `--show-all` | `title <text>`, `description <text>`, `status <word>`, `priority p<N>`, `<field> <value>` (each field of the definition that applies) | the flags of the command |
+| *`backlog update <item>` | *`--whatif`, `--json`, `--show-all` | `title <text>`, `description <text>`, `status <word>`, `priority p<N>`, `<field> <value>` (each field of the definition that applies), `restore` (the previous version of an unreadable item), `seq <n>` (only for an item whose number cannot be read) | the flags of the command |
 | `backlog list` | `--json`, `--show-all` | `branch <name>` | `--json`, `--show-all` |
 | `backlog show <item>` | `--json`, `--show-all` | | |
-| `backlog archive <item>` | *`--whatif`, `--json` | | |
+| `backlog archive <item>` | *`--whatif`, `--json`, *`--show-all` | | |
 | `backlog archive done` | *`--whatif`, `--json` | | |
 | `backlog import <branch>` | `--higher`, *`--whatif`, `--json` | | |
 | *`backlog branch` | `--json` | `import <branch>` | `--higher`, *`--whatif`, `--json` |
@@ -220,7 +221,7 @@ Every team command takes `--team <name>`, `--agent <name>`, `--session <id>`, `-
 | `backlog team pop` | *`--whatif` | | |
 | `backlog team query` | | `plan` (what the queue offers each person), `rules` (the rule set) | `--show-all` on `rules` |
 | `backlog team validate` | `--show-all` | | |
-| `backlog team migrate` | *`--whatif`, `--ask`, `--show-all` | | |
+| `backlog team migrate` (open: section 8, decision C) | *`--whatif`, `--ask`, `--show-all` | | |
 
 ### 5.3 Removed commands
 
@@ -230,39 +231,38 @@ Every team command takes `--team <name>`, `--agent <name>`, `--session <id>`, `-
 
 The owner's team file, with the actual rules and item definition of the Cody team, is written to the topology repository (decision 36). It is not in the public repository. It must pass `backlog validate`. It is a deliverable of this work (plan, task 9).
 
-## 7. Choices the lead made, for the owner to confirm
+### 4.13 Storage and local state
 
-1. (decided 2026-11-15: no step; decisions 53 to 56)
-2. The packaged default item definition declares `status` only (new, active, closed).
-3. A user command checks the type of a value, not its `values` list.
-4. The keys `item_definition`, `archive_folder`, the five variable keys, `redaction_patterns` (with `find` and `replace`), and the history key `command` (on the branch today it is called `step`).
-5. `backlog upgrade` both updates the CLI and converts the items; `backlog team migrate` stays until the owner decides it goes into `backlog upgrade`.
-6. The turn-taking of two processes in one local copy stays as it is until the owner decides.
-7. The team forms of `archive done`, `import`, `branch` and `branch import`: the owner named `list`, `show` and `archive` among "most of the user commands"; the lead added these four.
-10. A command that would change the backlog where the backlog location is not a git repository refuses with exit 4 and names `backlog setup`.
-8. The third example team is built from the shipped template with every behaviour (`patterns`), renamed `lead-and-reviewers`; the owner checks that it is the simplified form of his workflow.
-9. An item is named by number, slug or priority (`p0`).
+- **Folder of a repository.** In a separate backlog repository, the items of a repository live in `<owner>/<name>/`; inside the repository, in `.backlog/`. A repository with no origin is named `local/<folder name>`.
+- **Files.** Open items are `phases/<slug>.json`; archived items move under the `archive_folder` (default `archive`). `index.json` holds the priority order (3.5). `numbers.json` holds `{"last": <n>}`, the highest number handed out.
+- **Next number.** One above the highest number the folder ever held: the item file names in the history of every branch of the backlog repository, every value `numbers.json` ever had, and the files and `numbers.json` present (ruling R12).
+- **Slug.** The number padded to three digits, a hyphen, and the title in lowercase with every run of other characters than letters and digits replaced by one hyphen, hyphens at the ends removed (`012-fix-the-login-page`); a title with no letter or digit gives `item`.
+- **Local state.** In the `.git` folder of the backlog repository's local copy, or in `.backlog/.state` when the items live inside the repository (never committed): the lock and its wait (decision A of section 8), the recovery journal, the record of what each agent last read, and the per-user record of a valid team file (`smooth-backlog-cli/teams-validation/`).
+- **Recovery journal.** Before a command writes several files, it writes their earlier content to the journal on disk. A command killed in the middle leaves the journal; the next command restores those files before it acts.
+- **What an agent last read.** A command that shows an item to an agent records the item's `updated`, `updated_by` and the backlog commit in `smooth-backlog-cli-views/<agent>.json`; a later change by that agent is refused with exit 5 when the item changed since (4.10). An item the agent never read is written without the check.
 
-## 8. What the schemas or the code define and this document does not yet describe
+### 4.14 Other behaviour
 
-| What | Where it is defined | What is missing from this document |
-|---|---|---|
-| The folder layout of the backlog (where item files, the index and the number record live) | code (`src/shared/store.js`, `src/shared/item-file.js`) | the layout and the file names |
-| The number record (`numbers.json`) | code (`src/shared/numbers.js`) | its content and when it is written |
-| The recovery journal of a change of several files | code (`src/shared/store.js`) | what is journalled and how a killed command is finished |
-| The lock of the local copy and its wait | code (`src/shared/store.js`) | waiting for choice 6 |
-| Where a caller's last read of an item is recorded (for exit 5) | code (`src/shared/seen.js`) | the record and its place |
-| The per-user state folder and the 24-hour record of a valid team file | code (`src/team/teams-load.js`) | the folder and the record |
-| `push-backlog-updates` | configuration on the branch today | conflicts with decision 44; to remove or to justify |
-| The slug: characters kept, length | code (`src/shared/sequence.js`) | the rule |
-| What `backlog list` and `backlog show` print for people | code (`src/shared/read.js`, `src/shared/query.js`) | the columns and the form |
-| `backlog import` and `backlog branch import` | code (`src/shared/move.js`) | they do the same thing on the branch today; how they differ, if they do |
-| `archive done`: which items count as done | code | the final values of the definition that applies |
-| An item that cannot be read: exit 2 naming the field, and the repair | code (`src/shared/repair.js`) | the command that repairs it, now that `--restore` and the field flags go |
-| `--ask` without a terminal | code | exit 2, nothing written |
-| The update notice: weekly check, wait at most 1.5 s, warning only | code (`src/upgrade.js`) | the schedule and where its settings live |
-| The run recorder hook, `SMOOTH_BACKLOG_CLI_RUN_HOOK` | code | waiting for the owner |
-| Git 2.40 or newer for team commands | code | the requirement |
-| The redaction of credentials in addresses | code (`src/shared/safety.js`) | the patterns |
-| The repository name from git (origin `owner/name`) | code | what happens with no origin |
-| The rule evaluator of the branch today (steps, ordered table, effects) | code (`src/team/rules/`) | replaced by team-rules-spec.md; the code is rewritten (plan) |
+- **Printed lists.** `backlog list` prints one line per item: the priority (`p0`), the number, the slug and the status; `--json` prints the items. `backlog show` prints every property and the history, one entry per line.
+- **`--ask` without a terminal** exits 2 and writes nothing.
+- **Unreadable item.** A command that meets an item it cannot read exits 2 naming the item and the property; the ways out are `backlog update <item> <property> <value>`, `backlog update <item> restore` (its previous version), and, for an unreadable number, `backlog update <slug> seq <n>` (decision 72).
+- **`archive done`** archives the items of the branch whose status is a `final` value of the definition that applies.
+- **`backlog import <branch>`** and **`backlog branch import <branch>`** do the same thing (decision 74): the open items of that branch come to the current branch, after its items, before them with `--higher`.
+- **The update notice.** Its settings are in `smooth-backlog-cli/config.json` of the user's configuration folder (`$XDG_CONFIG_HOME`, else `~/.config`), never in a repository: `weekly` on by default, `auto` off. A command run at a terminal checks for a release beside its work when the last check is older than seven days (24 hours with `auto`, one hour after a failed check), waits for it at most 1.5 seconds after its own work, and only prints a warning on standard error.
+- **Git.** Team commands need git 2.40 or later; an older git is refused with exit 2.
+- **Credentials.** In every output, the user-information part of an address (between `://` and the last `@`) is removed.
+
+## 7. Decisions the lead took from earlier decisions
+
+Each is recorded in [decisions.md](decisions.md) with the earlier decision it follows from (decisions 64 to 75): the packaged definition declares `status` alone; user commands check types, not value lists; the key names; the team forms of every user command; the third example team written from the owner's actual team file; an item named by number, slug or `p0`; exit 4 when the backlog location is not a git repository; `backlog archive --show-all`; `backlog update <item> restore` and `seq <n>` for unreadable items; `push-backlog-updates` removed; `import` and `branch import` the same; `re2` for regular expressions.
+
+## 8. Open decisions that block this specification
+
+The lead cannot take these from the owner's earlier decisions. Each is presented to the owner with its options; until each is taken, the sections named stay incomplete.
+
+| Decision | Sections it blocks |
+|---|---|
+| A. Whether two commands running at the same moment in one local copy of the backlog take turns (today a lock file and the variable `SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS`) | 4.10, 4.13 |
+| B. Whether the run recorder (the variable `SMOOTH_BACKLOG_CLI_RUN_HOOK`, which starts a program the user names on every command) stays | 4.7, 5 |
+| C. Whether `backlog team migrate` goes into `backlog upgrade` | 4.12, 5.2 |
+| D. What `backlog upgrade` and `backlog validate` do with a value in a field the definition that applies does not declare | 3.1, 4.5, 4.12 |

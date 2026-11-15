@@ -84,7 +84,7 @@ The owner had his round-13 message reviewed by another AI and asked the lead to 
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.
 
-- R1. For team behaviour the CLI is a rules evaluator: given an item, the command, the caller and the arguments, the team's rule set decides whether the command is allowed, what the new status is and which fields change. The code holds no team behaviour, no status word, no stage, no role.
+- R1, as narrowed by decisions 53 to 59. For team behaviour the CLI is a rules engine: given a change of an item, the caller and the command, the team's rules decide whether the change is allowed. The code holds no team behaviour, no status word, no stage, no role.
 - R2. Splitting, parents, children and dependencies are not actions of the CLI. They are rules over fields. Limits, queue order, review rounds, size caps and required notes are rules over fields in the same way. (Decision 28 says the same for all workflow.)
 - R3. User commands enforce nothing about flow, status words or team behaviour. The CLI ignores the team file unless a command runs under `backlog team`. Who the user is comes from the operating system user.
 - R3a, with R16 and R19. User commands leave items of a team out of what they list, show and change. `--show-all` is the one way in: with it a reading command includes them and a user command may set values on an item of a team (decisions 7 and 29). A team that wants a field protected says so in its rules; the rules bind the team commands.
@@ -93,8 +93,7 @@ Reviewed one by one against the decisions above on 2026-11-14. Each keeps its nu
 - R5. The team file holds, per team, the people, the team's rule set and the team's item definition. The CLI only reads it; it never creates, rewrites or registers it.
 - R6. A template is a starting copy. A team edits its own definition in the team file to fit its way of working.
 - R7. The item definition is data only: field names, types, descriptions, defaults, allowed values. All dynamic behaviour is in the rule set.
-- R8. The rule set is written so that an agent or a person understands it without reading the evaluator. The team skills use the same rule set directly (decision 17).
-- R10. The order of the rules is part of the rule set, in the manner of a routing table: an ordered table with a defined precedence.
+- R8. The rule set is written so that an agent or a person understands it without reading the engine (with the team's description in words, decision 56). The team skills use the same rule set directly (decision 17).
 - R11. `backlog team validate` checks the whole team file (the people, the item definition, every rule) and says, per problem, where it is, which rule, why, and what would fix it.
 - R12. An item number is unique and never reused, at any size of backlog. A number identifies an item; it is not its priority.
 - R13. Priority is separate from the number. The order of the queue is kept in a JSON index file in the backlog folder: per branch, the items in priority order with their number, slug, title and status (decision 23).
@@ -118,7 +117,7 @@ Reviewed one by one against the decisions above on 2026-11-14. Each keeps its nu
 - Question 2. A team command publishes only its own commit; a person's unpushed commits stay local.
 - Question 3. Merging branches with git is outside the scope of the CLI. The CLI renumbers nothing after such a merge; a command given a number that two items hold names both slugs and stops.
 - Question 4. Any finding in any entry of the team file stops every team command of every team of that file.
-- Question 5. Among the team commands, `backlog team query` (its list form, `query <item>`, `query rules`), `backlog team validate` and `backlog team migrate` accept `--show-all`; given together with `--team`, `--team` decides.
+- Question 5, as applied to the commands of decision 38. The team commands that read over teams accept `--show-all` (`backlog team list`, `show`, `query rules`, `validate`, `migrate`); a team command that changes items acts for one team; given together with `--team`, `--team` decides.
 - Question 6. Only the repository's `.backlog/config.json` defines where the team file is: its `teams_file` key, else the repository's folder of a backlog repository named there, else `.backlog/teams.json`. The SHA of the team file is written into `.backlog/config.json`.
 - Question 7. Nothing is built to protect a migrated folder from older releases; every installation is upgraded before a folder is migrated.
 

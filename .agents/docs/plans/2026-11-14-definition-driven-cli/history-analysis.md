@@ -62,10 +62,10 @@ The 30 commits of 2026-11-09 before the first code commit are documents: the own
 | A command publishes only the item files, the index and the number record it wrote; a failed publication or pull is undone on the command's own paths and a person's own edits come back | e541205, 977223a, b38791b, a5e62d4, 6f41ae4, 33c7234 | IN FORCE (2026-11-04 D) |
 | A team command publishes its own commit alone and runs again when the upstream changed what it read | 9b0e293, 5895948 | IN FORCE (round 12 question 2) |
 | "One exported lock wait": a command waits for another process that uses the same local copy | 9b0e293 | QUESTION (already with the owner: whether two processes in one local copy take turns; decision 32 makes who may write an item a team rule) |
-| The rule language: the pattern matcher that runs in linear time, values, conditions, functions and texts | 6f09ed3, bb312a8, dce466f, 151fb1c | IN FORCE (rulings R1 and R8) |
-| The step evaluator: the ordered table walk, the argument list, typed set, add and remove, the effects note, related, place, say, team, branch, archive and delete, and the step "new" | d430128, 1e2dc4c, e200248, 5c4ba57 | IN FORCE (rulings R1 and R10) |
-| The pop table walk with queue order and skip set; the named filters | 8188bd6, 3b6b3cb | IN FORCE (the rule set's pop table and filters) |
-| The checks of the team file (shape, team names, people, item definition, every rule, effect, reference and pattern, a rule no item can reach) and `backlog team validate` with the item and number checks | 543aea6, e74b422, 7db12df, 5f7e029, 8cd0486, 9695740, 1b5219c, f6560b2, 7c39343, 1abaaa9 | IN FORCE (ruling R11) |
+| The rule language: the pattern matcher that runs in linear time, values, conditions, functions and texts | 6f09ed3, bb312a8, dce466f, 151fb1c | ARCHIVED BEHAVIOUR (decisions 60 and 62: conditions in JsonLogic evaluated by json-logic-js; a library matches regular expressions) |
+| The step evaluator: the ordered table walk, the argument list, typed set, add and remove, the effects note, related, place, say, team, branch, archive and delete, and the step "new" | d430128, 1e2dc4c, e200248, 5c4ba57 | ARCHIVED BEHAVIOUR (decisions 53 to 59: no step, no order, no rule sets a value) |
+| The pop table walk with queue order and skip set; the named filters | 8188bd6, 3b6b3cb | ARCHIVED BEHAVIOUR for the pop table of steps; the queue and filters of team-rules-spec.md section 9 replace it |
+| The checks of the team file (shape, team names, people, item definition, every rule, effect, reference and pattern, a rule no item can reach) and `backlog team validate` with the item and number checks | 543aea6, e74b422, 7db12df, 5f7e029, 8cd0486, 9695740, 1b5219c, f6560b2, 7c39343, 1abaaa9 | IN FORCE as validation (ruling R11); rewritten to team-rules-spec.md section 11 with Ajv (decision 62) |
 | The team file is validated before a team command acts; its SHA in `.backlog/config.json`; the per-user record | 3d827b8, 741660a | IN FORCE (rulings R21 and R22) |
 | One resolution of team, agent, session, repository and branch; the `--show-all` and `--team` rules for team commands | 54b306b to ac25a03 | IN FORCE (ruling R15, round 12 question 5, decision 31) |
 | `backlog setup` copies the generic team templates into `.backlog/team-templates` and commits them with the configuration; it recommends the migration | fd05ac8, 90d2ac7, da0ed42, 7197785 | IN FORCE (rulings R23 and R25) |
@@ -76,7 +76,7 @@ The 30 commits of 2026-11-09 before the first code commit are documents: the own
 | The hand-off refusal and its exemptions | 30d98cf, 6c0c21c, cd42595 | TEAM RULE (a hand-off between holders is workflow) |
 | `backlog new` writes the fixed fields and the parent; `backlog done` stores the word closed; a finished word stamps a completion time; `backlog new` loses `--force` | da49625, ba5106b, 9c4f894 | ITEM DEFINITION: the parent and the completion time are fields, and the finished words are the values a definition marks as final; `backlog done` is an OPEN COMMAND |
 | A status of an item without a team is stored as typed | da49625, 9c4f894 | IN FORCE (owner principle of 2026-11-08) |
-| The history of an item is full entries (when, who, session, step, changes, note) written with every change; a move in the order adds no entry, because the index is its own file | 866a788 to 1a512dc | IN FORCE (the base item's history) |
+| The history of an item is full entries (when, who, session, the command, changes, note; the key `step` becomes `command`) written with every change; a move in the order adds no entry, because the index is its own file | 866a788 to 1a512dc | IN FORCE (the base item's history) |
 | `backlog history` prints the entries | 866a788, 8a821f7 | ARCHIVED BEHAVIOUR (decision 15) |
 
 ## 2026-11-11 to 2026-11-14 (111 commits)
@@ -91,10 +91,10 @@ The 28 commits that start with "Plans:" or "Docs:" are documents: the plan of 20
 | A team item is read and written as stored, every key of it, so a converted item keeps its stage and review state | 3a8a18d, 0f04973, 2e030df | IN FORCE for "as stored"; stage and review state are ITEM DEFINITION fields of a team |
 | The earlier team commands install their own reading of the earlier words; the work-in-progress reading of a refinement | 3a8a18d, f1e4d48, 5df67f6 | ARCHIVED BEHAVIOUR: a bridge for the coded team workflow, which decisions 28 and 32 remove |
 | The finished words are one list of the item definition; the index orders only the entries of its scope | 54d97a6 | ITEM DEFINITION (the values a definition marks as final) |
-| A team step is applied as one result: the items with their history, archive and delete, the number, the order in the index | f23a071, c600917 | IN FORCE |
-| One parser for the arguments of a step: the reserved flags by name, every other `--name` a value of the step | 1074902 | IN FORCE |
-| `backlog team new` runs the step "new" of the team's rules; `backlog team update <item> <step> [--<argument> <value>]` runs one step; `backlog team pop` takes the first step the pop table offers; every instruction names the step as a word | a736ce5, d762557, c77c0fc, ef1f9e2 | IN FORCE (ruling R1) |
-| `backlog team query`: list, one item, a filter, check, plan, rules and steps; the earlier views are gone | 4cdde9b, ba7af60, dcb2edb, ea0ac7b, 3462a8f | IN FORCE |
+| A team step is applied as one result: the items with their history, archive and delete, the number, the order in the index | f23a071, c600917 | IN FORCE as one written change of an item (team-rules-spec.md section 3); archive, delete, number and order as effects of a rule: ARCHIVED BEHAVIOUR (decision 59) |
+| One parser for the arguments of a step: the reserved flags by name, every other `--name` a value of the step | 1074902 | ARCHIVED BEHAVIOUR (decision 54: a team changes items through `<property> <value>`; `backlog team new` takes `--<field> <value>`) |
+| `backlog team new` runs the step "new" of the team's rules; `backlog team update <item> <step> [--<argument> <value>]` runs one step; `backlog team pop` takes the first step the pop table offers; every instruction names the step as a word | a736ce5, d762557, c77c0fc, ef1f9e2 | IN FORCE for `backlog team new` and `backlog team pop` on the rules engine; `backlog team update <item> <step>` and step words: ARCHIVED BEHAVIOUR (decisions 53 and 54) |
+| `backlog team query`: list, one item, a filter, check, plan, rules and steps; the earlier views are gone | 4cdde9b, ba7af60, dcb2edb, ea0ac7b, 3462a8f | IN FORCE for `query plan` and `query rules`; list and one item become `backlog team list` and `show`, a filter `backlog team list --filter`; `query check` and `query steps`: ARCHIVED BEHAVIOUR (decisions 38, 53) |
 | Every value of a JSON answer is redacted before it is serialized | 4712138 to ac9572d | IN FORCE |
 | The migration: one markdown item becomes one JSON item with the rules for the holder, the links to other items and the history; the plan of a folder with its stops; `backlog team migrate` and its record | b0191d4 to 5bf19f5, 846bb4b to 336db5e | IN FORCE (rulings R4, R17 and R25); where the holder and the links go is ITEM DEFINITION, and what happens to a value whose field the definition does not declare is a QUESTION (already with the owner) |
 | User commands do not see items of a team; the reading commands see them with `--show-all` | ce68d33, 99e1d19, 947c300, 36a8042 | IN FORCE (ruling R3a with R16, decision 7) |
@@ -106,6 +106,8 @@ The 28 commits that start with "Plans:" or "Docs:" are documents: the plan of 20
 ## Result
 
 All 335 commits were read by their record (the subject line of each); the code of each commit was not read. Nothing found on this branch conflicts with the pattern in a way that has no place: every coded workflow found (status order, verdicts, review, hand-off, holder, links between items, parent, completion time, views) becomes a field of an item definition or a rule of a rule set.
+
+Revised 2026-11-15 after decisions 53 to 62: the rule language, the step evaluator, the pop table of steps, the step argument parser and `query check` and `query steps` moved from IN FORCE to ARCHIVED BEHAVIOUR, as marked in their rows.
 
 Two points are QUESTION, both already recorded for the owner: whether two processes in one local copy take turns, and what happens to a value whose field the applicable definition does not declare.
 

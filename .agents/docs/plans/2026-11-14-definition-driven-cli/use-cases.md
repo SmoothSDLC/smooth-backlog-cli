@@ -95,11 +95,11 @@ Each use case is one scenario: the situation, the command as typed, and what mus
 
 ### Team forms of the user commands (decision 38)
 - *T-NEW-1. `backlog team new --team web --agent lead-1 --title "Parse the header" --description "..."`, a rule allowing it: the item has its team, the team definition's fields at their defaults, and what the rule set.
-- T-NEW-2. A rule denies: exit 1 with the rule's text, no number used, nothing written.
+- T-NEW-2. A rule fails: exit 1 with the rule's error, no number used, nothing written.
 - *T-LIST-1. `backlog team list --team web` lists the team's items of the branch in priority order; with `--show-all` every team's.
 - *T-SHOW-1. `backlog team show 20 --team web` prints the item.
 - *T-UPD-1. `backlog team update 20 estimate 30 --team web --agent member-1`, `estimate` a field of the team definition and no rule failing: the field is set and the history names the agent.
-- *T-UPD-2. A requirement fails: exit 1 with its message, nothing changes.
+- *T-UPD-2. A rule fails: exit 1 with its error, nothing changes.
 - *T-UPD-3. A value outside the field's `values` list: exit 1.
 - *T-UPD-5. With `--whatif` the answer is given and nothing changes.
 - *T-ARCH-1. `backlog team archive 20 --team web --agent lead-1` archives the item when a rule allows it; `backlog team archive done` archives every finished item the rules allow.

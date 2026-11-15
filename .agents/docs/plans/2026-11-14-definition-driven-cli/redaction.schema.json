@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SmoothSDLC/smooth-backlog-cli/redaction.schema.json",
+  "title": "Redaction rules",
+  "description": "A list of redaction rules (redaction-spec.md): the packaged default definition, or the repository's own rules under redaction_rules in .backlog/config.json.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/rule"
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": [
+        "find",
+        "replace"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "description": "Used only by validation to name the rule."
+        },
+        "description": {
+          "type": "string",
+          "description": "What the rule hides, in words."
+        },
+        "find": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A regular expression in RE2 syntax (matched in linear time)."
+        },
+        "replace": {
+          "type": "string",
+          "description": "The text put in place of each match; $1, $2, ... insert groups of the match."
+        },
+        "properties": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "description": "The item properties the rule applies to; absent: every text property and every text inside lists."
+        },
+        "applies": {
+          "enum": [
+            "always",
+            "when-enabled"
+          ],
+          "default": "when-enabled",
+          "description": "always: applied even when redact_pii is false (credentials); when-enabled: only when redact_pii is true."
+        }
+      }
+    }
+  }
+}

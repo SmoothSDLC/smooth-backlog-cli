@@ -43,3 +43,5 @@ Decisions that are no longer in force, with what replaced them. Nothing here des
 | Round 12, question 5 as worded: `--show-all` on `backlog team query` (list form, `query <item>`) | 2026-11-09 | decision 38: `backlog team list` and `show` replace those query forms |
 | `backlog update <item> --restore` as a flag (2026-11-05) | 2026-11-05 | decision 72: `backlog update <item> restore` |
 | `push-backlog-updates: false` stops the push (configuration on the branch) | 2026-11-05 | decisions 44 and 73 |
+| Decision 73: the key `push-backlog-updates` goes | 2026-11-15 | decision 76 |
+| Decision 46 in part: the redaction patterns as a list in `.backlog/config.json` with `find` and `replace` only | 2026-11-15 | decision 78: redaction rules of `redaction.schema.json`, the repository's own rules in `.backlog/config.json` beside the packaged ones |

@@ -74,28 +74,18 @@
     "redact_pii": {
       "type": "boolean",
       "default": false,
-      "description": "true turns on the redaction of personal and secret data in backlog items (decision 46)."
+      "description": "true applies the redaction rules marked when-enabled (redaction-spec.md)."
     },
-    "redaction_patterns": {
+    "push-backlog-updates": {
+      "type": "boolean",
+      "default": true,
+      "description": "false stops the push of the commits the CLI makes; true by default (decision 76)."
+    },
+    "redaction_rules": {
       "type": "array",
-      "description": "What to find and what to put in its place, applied when redact_pii is true.",
+      "description": "The repository's own redaction rules, in the form of redaction.schema.json, applied beside the packaged default ones.",
       "items": {
-        "type": "object",
-        "required": [
-          "find",
-          "replace"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "find": {
-            "type": "string",
-            "format": "regex",
-            "description": "A regular expression."
-          },
-          "replace": {
-            "type": "string"
-          }
-        }
+        "type": "object"
       }
     }
   },

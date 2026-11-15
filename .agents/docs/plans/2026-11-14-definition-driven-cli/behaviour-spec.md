@@ -8,7 +8,7 @@ Status: the behaviour of the CLI when the simplify branch is finished. Written 2
 
 1. [The pattern](#1-the-pattern)
 2. [Terms](#2-terms)
-3. [Schemas](#3-schemas) (the team rules have their own specification, [team-rules-spec.md](team-rules-spec.md), and schema, [team-rules.schema.json](team-rules.schema.json)): 3.1 the base item, 3.2 the item definition, 3.3 the team file and the rule set, 3.4 the configuration, 3.5 the index, 3.6 the example team file, 3.7 the packaged defaults
+3. [Schemas](#3-schemas) (the team rules and redaction have their own specifications and schemas: [team-rules-spec.md](team-rules-spec.md) with [team-rules.schema.json](team-rules.schema.json), [redaction-spec.md](redaction-spec.md) with [redaction.schema.json](redaction.schema.json)): 3.1 the base item, 3.2 the item definition, 3.3 the team file and the rule set, 3.4 the configuration, 3.5 the index, 3.6 the example team file, 3.7 the packaged defaults
 4. [Behaviour](#4-behaviour): 4.1 the backlog location, 4.2 numbers, slugs and priority, 4.3 the definition that applies, 4.4 history, 4.5 validation, 4.6 how a team command applies the rules, 4.7 inputs and environment variables, 4.8 output and exit codes, 4.9 redaction, 4.10 two writers, 4.11 setup, 4.12 upgrade, 4.13 storage and local state, 4.14 other behaviour
 5. [Commands](#5-commands): 5.1 user commands, 5.2 team commands, 5.3 removed commands
 6. [The owner's team file](#6-the-owners-team-file)
@@ -89,7 +89,8 @@ The team file holds one entry per team, each with `people` (each person with a l
 | `item_definition` | The repository's user item definition; absent means the packaged one. |
 | `archive_folder` | The folder an archived item moves to. |
 | `repository_variable`, `branch_variable`, `team_variable`, `agent_variable`, `session_variable` | The names of the environment variables commands read in this repository and branch (decision 31, 4.7). |
-| `redact_pii`, `redaction_patterns` | Redaction on or off (default off) and the patterns of this repository (decision 46, 4.9). |
+| `push-backlog-updates` | true by default: the commits the CLI makes are pushed; false keeps them local (decision 76). |
+| `redact_pii`, `redaction_rules` | Redaction of personal data on or off (default off) and the repository's own redaction rules ([redaction-spec.md](redaction-spec.md)). |
 | `migrated_at`, `migrated_by_version` | When the items were converted and by which version. |
 
 ### 3.5 The index: [index.schema.json](index.schema.json)
@@ -115,7 +116,7 @@ Each team's `description` says its way of working in words. The examples guide (
 
 ### 4.1 The backlog location
 
-The backlog location is always a git repository: the current repository (`.backlog`), or a repository outside the current repository's folder named by the configuration (decision 44). A command pulls the backlog before it acts, reading commands included. A command that changes the backlog commits only the files it wrote (items, the index, the number record) and pushes before it exits. When the push is refused, only the command's own commit is taken back, a person's own commits and edits stay, and the command exits 3. A team command publishes its own commit alone and runs again when what it read changed upstream (round 12, question 2). No output names a file or folder of the backlog.
+The backlog location is always a git repository: the current repository (`.backlog`), or a repository outside the current repository's folder named by the configuration (decision 44). A command pulls the backlog before it acts, reading commands included. A command that changes the backlog commits only the files the CLI changed (items, the index, the number record), never other changed files of the repository, and pushes only the commits the CLI made, unless `push-backlog-updates` is false (decisions 76 and 77). When the push is refused, only the command's own commit is taken back, a person's own commits and edits stay, and the command exits 3. A team command publishes its own commit alone and runs again when what it read changed upstream (round 12, question 2). No output names a file or folder of the backlog.
 
 ### 4.2 Numbers, slugs and priority
 
@@ -162,7 +163,7 @@ User commands print text for people; `--json` prints JSON. Team commands print J
 
 ### 4.9 Redaction
 
-When `redact_pii` is true, each pattern of `redaction_patterns` is applied to the text of an item before it is written, and to every output (decision 46). Credentials in addresses are always redacted in output.
+Redaction rules are evaluated on every change and on every output, for every command; their form, their sources (the packaged defaults and the repository's `redaction_rules`), the switch `redact_pii` and the order are specified in [redaction-spec.md](redaction-spec.md).
 
 ### 4.10 Two writers
 
@@ -250,11 +251,10 @@ The owner's team file, with the actual rules and item definition of the Cody tea
 - **`backlog import <branch>`** and **`backlog branch import <branch>`** do the same thing (decision 74): the open items of that branch come to the current branch, after its items, before them with `--higher`.
 - **The update notice.** Its settings are in `smooth-backlog-cli/config.json` of the user's configuration folder (`$XDG_CONFIG_HOME`, else `~/.config`), never in a repository: `weekly` on by default, `auto` off. A command run at a terminal checks for a release beside its work when the last check is older than seven days (24 hours with `auto`, one hour after a failed check), waits for it at most 1.5 seconds after its own work, and only prints a warning on standard error.
 - **Git.** Team commands need git 2.40 or later; an older git is refused with exit 2.
-- **Credentials.** In every output, the user-information part of an address (between `://` and the last `@`) is removed.
 
 ## 7. Decisions the lead took from earlier decisions
 
-Each is recorded in [decisions.md](decisions.md) with the earlier decision it follows from (decisions 64 to 75): the packaged definition declares `status` alone; user commands check types, not value lists; the key names; the team forms of every user command; the third example team written from the owner's actual team file; an item named by number, slug or `p0`; exit 4 when the backlog location is not a git repository; `backlog archive --show-all`; `backlog update <item> restore` and `seq <n>` for unreadable items; `push-backlog-updates` removed; `import` and `branch import` the same; `re2` for regular expressions.
+Each is recorded in [decisions.md](decisions.md) with the earlier decision it follows from (decisions 64 to 72, 74 and 75): the packaged definition declares `status` alone; user commands check types, not value lists; the key names; the team forms of every user command; the third example team written from the owner's actual team file; an item named by number, slug or `p0`; exit 4 when the backlog location is not a git repository; `backlog archive --show-all`; `backlog update <item> restore` and `seq <n>` for unreadable items; `push-backlog-updates` kept, true by default (decision 76); `import` and `branch import` the same; `re2` for regular expressions.
 
 ## 8. Open decisions that block this specification
 

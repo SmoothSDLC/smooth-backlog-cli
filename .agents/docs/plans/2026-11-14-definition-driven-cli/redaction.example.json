@@ -1,0 +1,20 @@
+{
+  "redact_pii": true,
+  "redaction_rules": [
+    {
+      "id": "internal-host",
+      "description": "Host names of the company's own network.",
+      "find": "\\b[a-z0-9-]+\\.corp\\.example\\.com\\b",
+      "replace": "[internal host]"
+    },
+    {
+      "id": "customer-id",
+      "description": "Customer numbers, only in the description.",
+      "find": "\\bCUST-[0-9]{6}\\b",
+      "replace": "CUST-******",
+      "properties": [
+        "description"
+      ]
+    }
+  ]
+}

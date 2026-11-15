@@ -99,6 +99,14 @@ The owner had his round-13 message reviewed by another AI and asked the lead to 
 74. `backlog import <branch>` and `backlog branch import <branch>` do the same thing: decision 41 keeps both, and the first description of 2026-10-15 named the second.
 75. Regular expressions in rules are matched by the `re2` package (bindings to Google's RE2, which matches in linear time): decision 62.
 
+## Owner decisions of 2026-11-15, round 14 corrections
+
+76. `.backlog/config.json` keeps the key `push-backlog-updates`: true by default (every change is pushed); a user can set it to false. This replaces decision 73.
+77. A command commits only the files the CLI changed, never other changed files of the repository, and pushes only the commits the CLI made. Decision 44 is read with this.
+78. Redaction has its own specification. Redaction rules are evaluated on every change. A packaged default redaction definition and an example exist beside a JSON Schema of redaction rules, so that the plan can point to them.
+79. Every part of the plan points to the specification and the schema it implements, so that the plan can be split into parts that are implemented one at a time.
+80. The plan is sliced into parts that can each be given to Cody on their own. Each part says what must be done before it and what depends on it. The plan is written with the superpowers patterns: specification first, behaviour scenarios (BDD) and test-driven development (TDD) in every part, and sub-agent development (an implementer and reviewers per part).
+
 ## Owner rulings of 2026-11-09 that remain in force
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.

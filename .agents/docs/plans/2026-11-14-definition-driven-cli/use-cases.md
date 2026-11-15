@@ -83,7 +83,14 @@ Each use case is one scenario: the situation, the command as typed, and what mus
 - U-SYNC-2. A refused push takes back only the command's own commit, exit 3; a person's commits stay.
 - U-SYNC-3. No output names a file or folder of the backlog; credentials in addresses are redacted.
 - *U-SYNC-4. Given the backlog location is not a git repository. When a command that changes the backlog is run. Then exit 4 naming `backlog setup`, nothing written.
-- *U-RED-1. Given `redact_pii` true and a pattern that replaces e-mail addresses. When an item is created whose description holds an address. Then the stored item and the output hold the replacement. Given `redact_pii` false, the address is stored as given.
+- *U-RED-1. Given `redact_pii` true and the repository rules of `redaction.example.json`. When `backlog new --title "Ping build01.corp.example.com" --description "Customer CUST-123456 wrote to ann@example.org"` is run. Then the stored title is `Ping [internal host]`, the description `Customer CUST-****** wrote to [redacted e-mail]`, and the output names `title` and `description` as redacted.
+- *U-RED-2. Given `redact_pii` false. Then the e-mail address is stored as given, and a GitHub token in a description is still replaced (a rule marked `always`).
+- *U-RED-3. Every change is redacted: `backlog update 12 description "token ghp_..."` and `backlog team update 20 result "..."` store the redacted text, and the team rules see the redacted value.
+- *U-RED-4. Every output is redacted: an item written before a rule was added is printed redacted by `backlog show`, and its file is unchanged until its next change.
+- *U-RED-5. `backlog validate` reports a redaction rule whose `find` is not valid RE2 syntax, and a `properties` name no definition declares.
+- *U-SYNC-5. Given another file of the repository is changed and not committed. When `backlog new ...` is run with the backlog inside the repository. Then the CLI's commit holds only `.backlog` files, and the other file stays changed and uncommitted.
+- *U-SYNC-6. Given a person's own commit not yet pushed. When `backlog new ...` is run. Then only the CLI's commit is pushed; the person's commit stays local.
+- *U-SYNC-7. Given `push-backlog-updates` false. Then the CLI commits and does not push.
 
 ## Team commands
 

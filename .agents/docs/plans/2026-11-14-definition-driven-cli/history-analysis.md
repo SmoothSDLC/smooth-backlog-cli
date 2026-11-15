@@ -46,3 +46,35 @@ Each behaviour gets one state:
 | `backlog done`, `backlog clean`, `backlog import` (with `--higher`), `backlog archive done`, `backlog init clean` and `init clean all-branches` | 778e090, d837889, 18eb5b9 | OPEN COMMAND; `backlog done` needs a finished word, which is a value of the status field of a definition |
 | `backlog list` with the words new, open, done, archive, branches, critical and all-branches | 0421a58 | IN FORCE for the list; the words that name a status or "critical" are ITEM DEFINITION |
 | The storage location is never a default | 3d0e2d3 | ARCHIVED BEHAVIOUR (reverted the next day by the owner, 7543354) |
+
+## 2026-11-09 and 2026-11-10 (129 commits)
+
+The 30 commits of 2026-11-09 before the first code commit are documents: the owner rulings R1 to R25, the design of the rules engine, four reviews and the owner's answers of round 12. Each ruling and answer is placed in [decisions.md](decisions.md) or [superseded-decisions.md](superseded-decisions.md); they are not repeated here. The code commits:
+
+| Behaviour | Commits | State |
+|---|---|---|
+| Every environment variable the CLI owns carries the prefix `SMOOTH_BACKLOG_CLI_`, with no alias | ba77e09 | IN FORCE (ruling R20); decision 31 adds that the configuration names the variables |
+| The configuration keeps the team-file keys; a configuration that cannot be read stops every command and names no path; the team file's place is resolved from the configuration | 40ab27f, 16c9aae | IN FORCE (ruling R22, round 12 question 6) |
+| Every read and write of an item file goes through one module | 05733de, 6cd4b7f, e3ac8bc | IN FORCE (no behaviour of its own) |
+| Items are JSON files with required base keys checked at write and read; a folder of markdown items stops with exit 2 | 206bfea, de9c4e9, 9253c21 to 889335b | IN FORCE (rulings R4 and R18, decision 5); the stored keys owner and owned since are ITEM DEFINITION |
+| An item number is never handed out twice: one above the highest number the folder ever held | 3838e5f, 150f104, 32b5175 | IN FORCE (ruling R12) |
+| `--seq` gives an item a number, also to repair an item whose number cannot be read | 150f104, 7c2f7f0, 889335b | IN FORCE as the repair of 2026-11-04 F; the command form is set in the specification |
+| A command publishes only the item files, the index and the number record it wrote; a failed publication or pull is undone on the command's own paths and a person's own edits come back | e541205, 977223a, b38791b, a5e62d4, 6f41ae4, 33c7234 | IN FORCE (2026-11-04 D) |
+| A team command publishes its own commit alone and runs again when the upstream changed what it read | 9b0e293, 5895948 | IN FORCE (round 12 question 2) |
+| "One exported lock wait": a command waits for another process that uses the same local copy | 9b0e293 | QUESTION (already with the owner: whether two processes in one local copy take turns; decision 32 makes who may write an item a team rule) |
+| The rule language: the pattern matcher that runs in linear time, values, conditions, functions and texts | 6f09ed3, bb312a8, dce466f, 151fb1c | IN FORCE (rulings R1 and R8) |
+| The step evaluator: the ordered table walk, the argument list, typed set, add and remove, the effects note, related, place, say, team, branch, archive and delete, and the step "new" | d430128, 1e2dc4c, e200248, 5c4ba57 | IN FORCE (rulings R1 and R10) |
+| The pop table walk with queue order and skip set; the named filters | 8188bd6, 3b6b3cb | IN FORCE (the rule set's pop table and filters) |
+| The checks of the team file (shape, team names, people, item definition, every rule, effect, reference and pattern, a rule no item can reach) and `backlog team validate` with the item and number checks | 543aea6, e74b422, 7db12df, 5f7e029, 8cd0486, 9695740, 1b5219c, f6560b2, 7c39343, 1abaaa9 | IN FORCE (ruling R11) |
+| The team file is validated before a team command acts; its SHA in `.backlog/config.json`; the per-user record | 3d827b8, 741660a | IN FORCE (rulings R21 and R22) |
+| One resolution of team, agent, session, repository and branch; the `--show-all` and `--team` rules for team commands | 54b306b to ac25a03 | IN FORCE (ruling R15, round 12 question 5, decision 31) |
+| `backlog setup` copies the generic team templates into `.backlog/team-templates` and commits them with the configuration; it recommends the migration | fd05ac8, 90d2ac7, da0ed42, 7197785 | IN FORCE (rulings R23 and R25) |
+| A number that two items hold is refused when a command is given it; either item is named by its slug | f19afcf | IN FORCE (round 12 question 3) |
+| A stored link between items that names such a number counts as undone; a dependency that was archived by force counts as finished | 5ceeca4, 30d98cf | TEAM RULE and ITEM DEFINITION (decision 28: a link between items is a field, what it blocks is a rule) |
+| The definition of items without a team is data, and `backlog fields` prints it | 5e80257, 35bb46b | IN FORCE as the mechanism (decision 20); its fixed list of fields is ITEM DEFINITION: replaced by the packaged default definition (decision 18) |
+| Archive writes no status word; an item is archived by where its file is | 846854e | IN FORCE (decision 22) |
+| The hand-off refusal and its exemptions | 30d98cf, 6c0c21c, cd42595 | TEAM RULE (a hand-off between holders is workflow) |
+| `backlog new` writes the fixed fields and the parent; `backlog done` stores the word closed; a finished word stamps a completion time; `backlog new` loses `--force` | da49625, ba5106b, 9c4f894 | ITEM DEFINITION: the parent and the completion time are fields, and the finished words are the values a definition marks as final; `backlog done` is an OPEN COMMAND |
+| A status of an item without a team is stored as typed | da49625, 9c4f894 | IN FORCE (owner principle of 2026-11-08) |
+| The history of an item is full entries (when, who, session, step, changes, note) written with every change; a move in the order adds no entry, because the index is its own file | 866a788 to 1a512dc | IN FORCE (the base item's history) |
+| `backlog history` prints the entries | 866a788, 8a821f7 | ARCHIVED BEHAVIOUR (decision 15) |

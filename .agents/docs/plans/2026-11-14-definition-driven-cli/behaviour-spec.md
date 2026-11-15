@@ -525,6 +525,12 @@ The owner had his round-13 message reviewed by another AI and asked the lead to 
 - **D-79.** Every part of the plan points to the specification and the schema it implements, so that the plan can be split into parts that are implemented one at a time.
 - **D-80.** The plan is sliced into parts that can each be given to one implementing session on its own. Each part says what must be done before it and what depends on it. The plan is written with the superpowers patterns: specification first, behaviour scenarios (BDD) and test-driven development (TDD) in every part, and sub-agent development (an implementer and reviewers per part).
 
+### Owner decisions of 2026-11-15, after round 14
+
+- **D-81.** Rules are evaluated only on changes. A command that only reads (`list`, `show`, `query`) evaluates no team rule and no redaction rule, because there is no change to evaluate.
+- **D-82.** This specification is the one product requirements document: every requirement in force is here with its reason or as a constraint, and every behaviour scenario is here; no separate list of decisions is kept. Earlier plans and documents about behaviour that is not part of this specification and its implementation plan are in `.backlog/archived/`.
+- **D-83.** The implementation plan is sliced so that one session of a smaller coding model can run a slice with the slice file alone: implementation in at most 30 minutes, review in at most 15 minutes in a new session that reads only the slice and the hand-off, the hand-off written into the slice's own backlog item, and an integration slice wherever slices must work together. Each slice says which skills to use: the code is written test first with the superpowers skills and refined with ponytail, and the review uses the superpowers review and a ponytail review against the slice's own scenarios and tests.
+
 ### Owner rulings of 2026-11-09 that remain in force
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.

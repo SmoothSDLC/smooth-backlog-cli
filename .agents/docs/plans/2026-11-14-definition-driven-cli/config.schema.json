@@ -79,7 +79,7 @@
     "push-backlog-updates": {
       "type": "boolean",
       "default": true,
-      "description": "false stops the push of the commits the CLI makes; true by default (decision 76)."
+      "description": "false stops the push of the commits the CLI makes; true by default."
     },
     "redaction_rules": {
       "type": "array",

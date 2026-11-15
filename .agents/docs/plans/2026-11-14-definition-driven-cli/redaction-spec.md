@@ -1,6 +1,6 @@
 # Redaction: specification
 
-Status: written 2026-11-15 from the owner's D-46 and D-78 (section 10). It is complete: no decision it depends on is open. Schema: [redaction.schema.json](redaction.schema.json). Packaged default rules: [default-redaction.json](default-redaction.json). Example of a repository's configuration: [redaction.example.json](redaction.example.json).
+The specification of redaction. Schema: [redaction.schema.json](redaction.schema.json). Packaged default rules: [default-redaction.json](default-redaction.json). Example of a repository's configuration: [redaction.example.json](redaction.example.json). Constraints C-39 and C-40 of [behaviour-spec.md](behaviour-spec.md) apply.
 
 ## 1. What redaction is for
 
@@ -14,7 +14,7 @@ A redaction rule is a JSON object (schema `$defs/rule`):
 |---|---|---|
 | `id` | no | Used only by validation to name the rule. |
 | `description` | no | What the rule hides, in words. |
-| `find` | yes | A regular expression in RE2 syntax, matched in linear time by the `re2` package (D-75). |
+| `find` | yes | A regular expression in RE2 syntax, matched in linear time by the `re2` package. |
 | `replace` | yes | The text put in place of each match; `$1`, `$2`, ... insert groups of the match. |
 | `properties` | no | The item properties the rule applies to. Absent: every text property of the item and every text inside a list. |
 | `applies` | no | `always`: applied even when `redact_pii` is false; `when-enabled` (the default): only when `redact_pii` is true. |
@@ -23,13 +23,13 @@ A redaction rule is a JSON object (schema `$defs/rule`):
 
 1. The packaged default rules, [default-redaction.json](default-redaction.json): credentials in addresses, private keys, bearer tokens, GitHub tokens and AWS access keys (`always`), and e-mail addresses, international telephone numbers and IPv4 addresses (`when-enabled`).
 2. The repository's own rules: the key `redaction_rules` of `.backlog/config.json`, in the same form.
-3. The switch: the key `redact_pii` of `.backlog/config.json`, false by default (D-46).
+3. The switch: the key `redact_pii` of `.backlog/config.json`, false by default.
 
 The rules in force for a command are the packaged ones followed by the repository's, keeping those marked `always` and, when `redact_pii` is true, also those marked `when-enabled`.
 
 ## 4. When the rules are evaluated
 
-- **On every change** (D-78): every command that would write an item applies the rules in force to the item as it would be (`next`), each rule in the order of section 3, each to the properties it names. This happens before the item is checked against its schema and definition and before the team rules are evaluated, so the team rules and the history see the redacted values. The history entry records the redacted values.
+- **On every change**: every command that would write an item applies the rules in force to the item as it would be (`next`), each rule in the order of section 3, each to the properties it names. This happens before the item is checked against its schema and definition and before the team rules are evaluated, so the team rules and the history see the redacted values. The history entry records the redacted values.
 - **Never on reading**: `list`, `show`, `query` and every other command that changes nothing evaluates no redaction rule; it prints the items as stored. An item stored before a rule existed keeps its content until it is next changed.
 - **Never on the configuration or the team file**: those are written by people.
 

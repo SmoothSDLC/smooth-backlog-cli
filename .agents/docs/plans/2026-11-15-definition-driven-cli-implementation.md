@@ -18,9 +18,9 @@
 
 ## Global constraints (every slice)
 
-- Node `>=24`, ES modules. Runtime libraries are used where they do the job (Ajv, ajv-formats, json-logic-js, re2), never hand-built (D-62).
+- Node `>=24`, ES modules. Runtime libraries are used where they do the job (Ajv, ajv-formats, json-logic-js, re2), never hand-built (C-40).
 - This repository is public: no host, machine, local path, port, model, private repository, agent or tool name in any tracked file or commit message; the private-details guard runs before every commit.
-- The code names no status word, role, review, claim, holder, dependency, parent, limit or hand-off (D-28, D-32, D-53 to D-59).
+- The code names no status word, role, review, claim, holder, dependency, parent, limit or hand-off (C-18, C-23).
 - User commands print text and take `--json`; team commands print JSON and take `--human`; every command that changes items takes `--whatif`.
 - Commits with the repository's agent identity, no trailers; slices commit on local branches `slice/<id>`; only the lead pushes `simplify/pr3-review`.
 

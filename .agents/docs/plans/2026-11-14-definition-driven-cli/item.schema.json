@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/SmoothSDLC/smooth-backlog-cli/item.schema.json",
   "title": "Backlog item",
-  "description": "One item file. The base properties below are the same for every item; every other property is a field of the item definition that applies to the item (decision 34: one flat object).",
+  "description": "One item file. The base properties below are the same for every item; every other property is a field of the item definition that applies to the item.",
   "type": "object",
   "required": [
     "seq",
@@ -71,7 +71,7 @@
     "cli_version": {
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+",
-      "description": "The version of the CLI that last wrote the item (decision 48). Given by the CLI."
+      "description": "The version of the CLI that last wrote the item. Given by the CLI."
     },
     "status": {
       "type": "string",
@@ -81,7 +81,7 @@
     "history": {
       "type": "array",
       "minItems": 1,
-      "description": "One entry per command that changed the item; the structure is fixed in the CLI (decision 45).",
+      "description": "One entry per command that changed the item; the structure is fixed in the CLI.",
       "items": {
         "$ref": "#/$defs/entry"
       }

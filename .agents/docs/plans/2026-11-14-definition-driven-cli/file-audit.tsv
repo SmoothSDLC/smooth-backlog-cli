@@ -109,10 +109,12 @@ NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/default-team.j
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/file-audit.tsv	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/history-analysis.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/index.schema.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item-definition.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.example.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/superseded-decisions.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/team-file.schema.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/teams.example.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/use-cases.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/README.md	describes the behaviour being built; listed in the backlog item
 REWRITE	.agents/scripts/sync-commands-md.mjs	copies COMMANDS.md into the skill; follows the rewrite of COMMANDS.md

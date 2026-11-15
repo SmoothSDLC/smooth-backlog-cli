@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SmoothSDLC/smooth-backlog-cli/item-definition.schema.json",
+  "title": "Item definition",
+  "description": "The fields of an item beyond the base properties. The same form is the item of a team in the team file, a repository's default definition named by item_definition in .backlog/config.json, and the definition packaged with the CLI.",
+  "type": "object",
+  "required": [
+    "status"
+  ],
+  "propertyNames": {
+    "not": {
+      "enum": [
+        "seq",
+        "slug",
+        "title",
+        "description",
+        "team",
+        "repository",
+        "branch",
+        "created",
+        "updated",
+        "updated_by",
+        "cli_version",
+        "history"
+      ]
+    }
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/field"
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "text",
+            "number",
+            "boolean",
+            "time",
+            "person",
+            "item",
+            "items",
+            "list"
+          ]
+        },
+        "default": {},
+        "values": {
+          "type": "array",
+          "description": "The allowed values, when the field has a closed list."
+        },
+        "final": {
+          "type": "array",
+          "description": "The values that mean the item is finished (status only)."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

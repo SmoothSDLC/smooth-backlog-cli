@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SmoothSDLC/smooth-backlog-cli/item.schema.json",
   "title": "Backlog item",
-  "description": "The base backlog item: what every item file holds whatever item definition applies. A person gives the title and the description; the CLI supplies the rest. Every other field of an item is declared by the item definition that applies (the team's, the repository's default, or the default packaged with the CLI), lives under fields, and is not part of this schema. The priority is not in the item: it is the item's place in the index file.",
+  "description": "One item file. The base properties below are the same for every item; every other property is a field of the item definition that applies to the item (decision 34: one flat object).",
   "type": "object",
   "required": [
     "seq",
@@ -13,117 +14,118 @@
     "created",
     "updated",
     "updated_by",
-    "fields",
+    "cli_version",
+    "status",
     "history"
   ],
-  "additionalProperties": false,
   "properties": {
     "seq": {
       "type": "integer",
-      "description": "The item's number in this repository, never reused. Supplied by the CLI at creation."
+      "minimum": 1,
+      "description": "The item's number in its repository folder, never reused. Given by the CLI."
     },
     "slug": {
       "type": "string",
-      "description": "The number and the title in file-name form; the name an item is addressed by in every command. Supplied by the CLI at creation."
+      "pattern": "^[0-9]+-[a-z0-9-]*$",
+      "description": "The number and the title in file-name form. Given by the CLI."
     },
     "title": {
       "type": "string",
       "minLength": 1,
-      "description": "A short title of the item. Given by the person: backlog new --title; changed with backlog update --title."
+      "description": "Given by the person."
+    },
+    "description": {
+      "type": "string",
+      "description": "Given by the person; markdown."
     },
     "team": {
       "type": "string",
-      "description": "The team that owns the item; absent when the item has no team. A base property of every item: an item that has it can be changed only with the team commands, and takes its fields from its team's item definition."
+      "minLength": 1,
+      "description": "The team that owns the item; absent when the item has no team."
     },
     "repository": {
       "type": "string",
-      "description": "The repository the item belongs to. Supplied by the CLI at creation."
+      "pattern": "^[\\w.-]+/[\\w.-]+$",
+      "description": "owner/name of the repository the item belongs to. Given by the CLI."
     },
     "branch": {
       "type": "string",
-      "description": "The branch the item belongs to. Supplied by the CLI at creation; changed with backlog move."
+      "minLength": 1,
+      "description": "The branch the item belongs to. Given by the CLI."
     },
     "created": {
       "type": "string",
       "format": "date-time",
-      "description": "When the item was created. Supplied by the CLI."
+      "description": "Given by the CLI."
     },
     "updated": {
       "type": "string",
       "format": "date-time",
-      "description": "When the item last changed. Supplied by the CLI on every change."
+      "description": "Given by the CLI at every change."
     },
     "updated_by": {
       "type": "string",
-      "description": "Who changed the item last: the agent named for the command, else the user of the configuration. Supplied by the CLI on every change."
+      "minLength": 1,
+      "description": "The agent of the command, else the user. Given by the CLI."
     },
-    "fields": {
-      "type": "object",
-      "description": "The values of the item. Only status is required; the CLI writes it at creation. Every other field comes from the item definition that applies (the team's, the repository's default, or the packaged default) and is absent until set. A key not listed here is kept as it is.",
-      "required": [
-        "status"
-      ],
-      "additionalProperties": true,
-      "properties": {
-        "status": {
-          "type": "string",
-          "description": "Where the item is, one word. The default item definition has at least the words new, active and closed; a team's item definition may declare its own. Supplied by the CLI at creation as the first word (new); changed with backlog update <item> status <word>."
-        }
-      }
+    "cli_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+",
+      "description": "The version of the CLI that last wrote the item (decision 48). Given by the CLI."
     },
-    "description": {
+    "status": {
       "type": "string",
       "minLength": 1,
-      "description": "What the item is about, in markdown, and the records appended to it. Given by the person: backlog new --description; changed with backlog update --description, --append and --section."
+      "description": "Declared by every item definition; its values come from the definition."
     },
     "history": {
       "type": "array",
-      "description": "One entry per command that changed the item.",
+      "minItems": 1,
+      "description": "One entry per command that changed the item; the structure is fixed in the CLI (decision 45).",
       "items": {
-        "type": "object",
-        "required": [
-          "at",
-          "by",
-          "session",
-          "step",
-          "changes",
-          "note"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the change was made."
-          },
-          "by": {
-            "type": "string",
-            "description": "Who made it."
-          },
-          "session": {
-            "type": "string",
-            "description": "The session id, or the empty text."
-          },
-          "step": {
-            "type": "string",
-            "description": "The command, or the step of a team's rules."
-          },
-          "changes": {
-            "type": "object",
-            "description": "One key per changed field, holding the value before and the value after.",
-            "additionalProperties": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2
-            }
-          },
-          "note": {
-            "type": "string",
-            "description": "Free text."
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": [
+        "at",
+        "by",
+        "command",
+        "changes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string",
+          "description": "The command that made the change, e.g. new, update, archive, team update."
+        },
+        "changes": {
+          "type": "object",
+          "description": "Each changed property with [before, after].",
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2
           }
+        },
+        "note": {
+          "type": "string"
         }
-      },
-      "minItems": 1
+      }
     }
   }
 }

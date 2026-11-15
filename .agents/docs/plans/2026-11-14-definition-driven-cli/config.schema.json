@@ -5,22 +5,103 @@
   "description": "The file .backlog/config.json at the root of a repository, committed in each branch.",
   "type": "object",
   "properties": {
-    "backlog_repository": {"type": "string", "description": "Path of the folder that holds the items, relative to the repository; \".backlog\" when the items live inside the repository."},
-    "backlog_origin_url": {"type": "string", "description": "Address from which backlog setup clones a separate backlog repository."},
-    "push-backlog-updates": {"type": "boolean", "description": "false stops the push of backlog commits made inside the repository."},
-    "user": {"type": "string", "description": "The person who uses the user commands, written by backlog setup."},
-    "team": {"type": "string", "description": "The team a team command acts for when neither the flag nor the variable names one."},
-    "teams_file": {"type": "string", "description": "Where the team file is."},
-    "teams_file_sha": {"type": "string", "description": "The SHA of the team file as last validated."},
-    "item_definition": {"type": "string", "description": "Path of the item definition that items without a team use in this repository and branch; absent means the definition packaged with the CLI."},
-    "archive_folder": {"type": "string", "description": "Folder, beside the open items, that backlog archive moves an item into."},
-    "repository_variable": {"type": "string", "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$", "description": "Name of the environment variable that gives the repository."},
-    "branch_variable": {"type": "string", "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$", "description": "Name of the environment variable that gives the branch."},
-    "team_variable": {"type": "string", "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$", "description": "Name of the environment variable that gives the team."},
-    "agent_variable": {"type": "string", "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$", "description": "Name of the environment variable that gives the agent."},
-    "session_variable": {"type": "string", "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$", "description": "Name of the environment variable that gives the session."},
-    "migrated_at": {"type": "string", "format": "date-time", "description": "When the items of this repository were converted to JSON."},
-    "migrated_by_version": {"type": "string", "description": "The version of the CLI that converted them."}
+    "backlog_repository": {
+      "type": "string",
+      "description": "Path of the folder that holds the items, relative to the repository; \".backlog\" when the items live inside the repository."
+    },
+    "backlog_origin_url": {
+      "type": "string",
+      "description": "Address from which backlog setup clones a separate backlog repository."
+    },
+    "push-backlog-updates": {
+      "type": "boolean",
+      "description": "false stops the push of backlog commits made inside the repository."
+    },
+    "user": {
+      "type": "string",
+      "description": "The person who uses the user commands, written by backlog setup."
+    },
+    "team": {
+      "type": "string",
+      "description": "The team a team command acts for when neither the flag nor the variable names one."
+    },
+    "teams_file": {
+      "type": "string",
+      "description": "Where the team file is."
+    },
+    "teams_file_sha": {
+      "type": "string",
+      "description": "The SHA of the team file as last validated."
+    },
+    "item_definition": {
+      "type": "string",
+      "description": "Path of the item definition that items without a team use in this repository and branch; absent means the definition packaged with the CLI."
+    },
+    "archive_folder": {
+      "type": "string",
+      "description": "Folder, beside the open items, that backlog archive moves an item into."
+    },
+    "repository_variable": {
+      "type": "string",
+      "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$",
+      "description": "Name of the environment variable that gives the repository."
+    },
+    "branch_variable": {
+      "type": "string",
+      "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$",
+      "description": "Name of the environment variable that gives the branch."
+    },
+    "team_variable": {
+      "type": "string",
+      "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$",
+      "description": "Name of the environment variable that gives the team."
+    },
+    "agent_variable": {
+      "type": "string",
+      "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$",
+      "description": "Name of the environment variable that gives the agent."
+    },
+    "session_variable": {
+      "type": "string",
+      "pattern": "^SMOOTH_BACKLOG_CLI_[A-Z0-9_]+$",
+      "description": "Name of the environment variable that gives the session."
+    },
+    "migrated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the items of this repository were converted to JSON."
+    },
+    "migrated_by_version": {
+      "type": "string",
+      "description": "The version of the CLI that converted them."
+    },
+    "redact_pii": {
+      "type": "boolean",
+      "default": false,
+      "description": "true turns on the redaction of personal and secret data in backlog items (decision 46)."
+    },
+    "redaction_patterns": {
+      "type": "array",
+      "description": "What to find and what to put in its place, applied when redact_pii is true.",
+      "items": {
+        "type": "object",
+        "required": [
+          "find",
+          "replace"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "find": {
+            "type": "string",
+            "format": "regex",
+            "description": "A regular expression."
+          },
+          "replace": {
+            "type": "string"
+          }
+        }
+      }
+    }
   },
   "additionalProperties": false
 }

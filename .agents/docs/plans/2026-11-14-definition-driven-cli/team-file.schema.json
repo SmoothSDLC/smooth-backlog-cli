@@ -5,59 +5,222 @@
   "description": "One entry per team: its people, its item definition and its rule set. The CLI only reads this file.",
   "type": "object",
   "minProperties": 1,
-  "additionalProperties": {"$ref": "#/$defs/team"},
+  "additionalProperties": {
+    "$ref": "#/$defs/team"
+  },
   "$defs": {
     "team": {
       "type": "object",
-      "required": ["people", "item", "rules"],
+      "required": [
+        "people",
+        "item",
+        "rules"
+      ],
       "additionalProperties": false,
       "properties": {
-        "people": {"type": "object", "description": "Each person of the team with the list of role words the rules use.", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
-        "item": {"$ref": "#/$defs/itemDefinition"},
-        "rules": {"$ref": "#/$defs/ruleSet"}
+        "people": {
+          "type": "object",
+          "description": "Each person of the team with the list of role words the rules use.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "item": {
+          "$ref": "#/$defs/itemDefinition"
+        },
+        "rules": {
+          "$ref": "#/$defs/ruleSet"
+        }
       }
     },
     "itemDefinition": {
       "type": "object",
       "description": "The fields of an item beyond the base item. The same form is used by the definition packaged with the CLI and by a repository's default definition.",
-      "required": ["status"],
-      "propertyNames": {"not": {"enum": ["seq", "slug", "title", "description", "team", "repository", "branch", "created", "updated", "updated_by", "archived", "history", "fields"]}},
-      "additionalProperties": {"$ref": "#/$defs/field"}
+      "required": [
+        "status"
+      ],
+      "propertyNames": {
+        "not": {
+          "enum": [
+            "seq",
+            "slug",
+            "title",
+            "description",
+            "team",
+            "repository",
+            "branch",
+            "created",
+            "updated",
+            "updated_by",
+            "cli_version",
+            "history"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/field"
+      }
     },
     "field": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": {"enum": ["text", "number", "boolean", "time", "person", "item", "items", "list"]},
+        "type": {
+          "enum": [
+            "text",
+            "number",
+            "boolean",
+            "time",
+            "person",
+            "item",
+            "items",
+            "list"
+          ]
+        },
         "default": {},
-        "values": {"type": "array", "description": "The allowed values, when the field has a closed list."},
-        "final": {"type": "array", "description": "The values that mean the item is finished (status only)."},
-        "description": {"type": "string"}
+        "values": {
+          "type": "array",
+          "description": "The allowed values, when the field has a closed list."
+        },
+        "final": {
+          "type": "array",
+          "description": "The values that mean the item is finished (status only)."
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
     "ruleSet": {
       "type": "object",
-      "required": ["table"],
+      "required": [
+        "table"
+      ],
       "additionalProperties": false,
       "properties": {
-        "table": {"type": "array", "description": "The rules in order; for a step, the first rule whose condition holds decides.", "items": {"$ref": "#/$defs/rule"}},
-        "pop": {"type": "array", "description": "The steps backlog team pop tries, in order.", "items": {"type": "object", "required": ["id", "step"], "additionalProperties": false, "properties": {"id": {"type": "string"}, "step": {"type": "string"}, "when": {"type": "object"}}}},
-        "filters": {"type": "object", "description": "Named readings of the team's items.", "additionalProperties": {"type": "object", "required": ["when"], "additionalProperties": false, "properties": {"description": {"type": "string"}, "when": {"type": "object"}}}}
+        "table": {
+          "type": "array",
+          "description": "The rules in order; for a step, the first rule whose condition holds decides.",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "pop": {
+          "type": "array",
+          "description": "The steps backlog team pop tries, in order.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "step"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "step": {
+                "type": "string"
+              },
+              "when": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "description": "Named readings of the team's items.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "when"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "when": {
+                "type": "object"
+              }
+            }
+          }
+        }
       }
     },
     "rule": {
       "type": "object",
-      "required": ["id", "step"],
+      "required": [
+        "id",
+        "step"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
-        "step": {"description": "The step word, a list of step words, or * for every step.", "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}, "minItems": 1}]},
-        "when": {"type": "object", "description": "A condition: all, any, not, is, in, empty, >=, <=, regex, contains, every, some."},
-        "deny": {"type": "string", "description": "The text of the refusal."},
-        "do": {"type": "object", "description": "The effects: set, add, remove, note, related, place, archive, delete, branch, team, say.", "propertyNames": {"enum": ["set", "add", "remove", "note", "related", "place", "archive", "delete", "branch", "team", "say"]}}
+        "id": {
+          "type": "string"
+        },
+        "step": {
+          "description": "The step word, a list of step words, or * for every step.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "when": {
+          "type": "object",
+          "description": "A condition: all, any, not, is, in, empty, >=, <=, regex, contains, every, some."
+        },
+        "deny": {
+          "type": "string",
+          "description": "The text of the refusal."
+        },
+        "do": {
+          "type": "object",
+          "description": "The effects: set, add, remove, note, related, place, archive, delete, branch, team, say.",
+          "propertyNames": {
+            "enum": [
+              "set",
+              "add",
+              "remove",
+              "note",
+              "related",
+              "place",
+              "archive",
+              "delete",
+              "branch",
+              "team",
+              "say"
+            ]
+          }
+        }
       },
-      "oneOf": [{"required": ["deny"]}, {"required": ["do"]}]
+      "oneOf": [
+        {
+          "required": [
+            "deny"
+          ]
+        },
+        {
+          "required": [
+            "do"
+          ]
+        }
+      ]
     }
   }
 }

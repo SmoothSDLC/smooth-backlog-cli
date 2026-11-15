@@ -59,6 +59,14 @@ The owner's decisions that are in force for this branch, each in its current wor
 51. The specification has a table of contents. A section called "Schemas" holds every schema; if user and team schemas are separated, the sections say so in their names.
 52. Every concept the specification refers to is described in it. Anything defined in a schema, or executed or enforced by the CLI, that the specification does not describe is listed in a table until it is described.
 
+## Owner decisions of 2026-11-15, round 13
+
+53. The team rules are a rules engine, not a set of named actions. Every rule of a team is evaluated on every change a team command makes to an item. No command, agent or person names a rule or a step: there is no step word and no rule is referenced by the CLI or by the caller.
+54. A team changes an item only by changing its fields (`backlog team update <item> <property> <value>`, the properties being the base properties and the fields of the team item definition). The change of a field, for example the status from `new` to `reviewed`, is what makes the rules evaluate. A rule says, for example: for the status to change from A to B, field X must have this value, field Y that value and field Z one of these values, and conditions A, B and C must hold; otherwise the update is refused with this error text, which the caller sees.
+55. The rules of a team must not contradict each other. A rule needs no name; rules may be numbered. A number or id of a rule is used only by validation, to say which rule is invalid, malformed or contradicts another.
+56. The steps a team goes through are not part of the rule format and not known to the CLI. How the rules shape a team's way of working is described in words beside the rules, not prescribed by the structure of the rules.
+57. Before any plan is built, the rule specification is written and codified: how a rule is written in JSON, its keywords and data structures for each kind of rule, how a change of a field triggers one or several rules, how one rule affects another, how a dependency between two rules is declared, how the error text is given, the order and hierarchy of evaluation, and the validation of the rules. A JSON Schema of the rules goes with it. The specification, the item specification and the schemas follow it.
+
 ## Owner rulings of 2026-11-09 that remain in force
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.

@@ -78,3 +78,37 @@ The 30 commits of 2026-11-09 before the first code commit are documents: the own
 | A status of an item without a team is stored as typed | da49625, 9c4f894 | IN FORCE (owner principle of 2026-11-08) |
 | The history of an item is full entries (when, who, session, step, changes, note) written with every change; a move in the order adds no entry, because the index is its own file | 866a788 to 1a512dc | IN FORCE (the base item's history) |
 | `backlog history` prints the entries | 866a788, 8a821f7 | ARCHIVED BEHAVIOUR (decision 15) |
+
+## 2026-11-11 to 2026-11-14 (111 commits)
+
+The 28 commits that start with "Plans:" or "Docs:" are documents: the plan of 2026-11-12 (archived), the owner decisions of 2026-11-13 and 2026-11-14 (in [decisions.md](decisions.md)) and the files of this folder. The code and test commits:
+
+| Behaviour | Commits | State |
+|---|---|---|
+| A refused push takes back only the command's own commit; a person's commit on top of it is never amended, dropped or published with it; a person's edit of a path the upstream changed is laid over it or kept in a named stash; a path is the command's own only when the command wrote it in this run | 9189567, f0e8f3b to 34f7eee, 752aa09 | IN FORCE (2026-11-04 D, round 12 question 2) |
+| Every failure of a team publication exits with one code, and `backlog team pop` reads it as "nothing to do now"; a git older than 2.40 is refused | c89ecdc, 83483bb, e80b014, 86ed2e5 | IN FORCE |
+| Publication waits for the lock of the local copy and takes back its files when locked out | 7256e5b | QUESTION (the same one as above: turn-taking of two processes in one local copy) |
+| A team item is read and written as stored, every key of it, so a converted item keeps its stage and review state | 3a8a18d, 0f04973, 2e030df | IN FORCE for "as stored"; stage and review state are ITEM DEFINITION fields of a team |
+| The earlier team commands install their own reading of the earlier words; the work-in-progress reading of a refinement | 3a8a18d, f1e4d48, 5df67f6 | ARCHIVED BEHAVIOUR: a bridge for the coded team workflow, which decisions 28 and 32 remove |
+| The finished words are one list of the item definition; the index orders only the entries of its scope | 54d97a6 | ITEM DEFINITION (the values a definition marks as final) |
+| A team step is applied as one result: the items with their history, archive and delete, the number, the order in the index | f23a071, c600917 | IN FORCE |
+| One parser for the arguments of a step: the reserved flags by name, every other `--name` a value of the step | 1074902 | IN FORCE |
+| `backlog team new` runs the step "new" of the team's rules; `backlog team update <item> <step> [--<argument> <value>]` runs one step; `backlog team pop` takes the first step the pop table offers; every instruction names the step as a word | a736ce5, d762557, c77c0fc, ef1f9e2 | IN FORCE (ruling R1) |
+| `backlog team query`: list, one item, a filter, check, plan, rules and steps; the earlier views are gone | 4cdde9b, ba7af60, dcb2edb, ea0ac7b, 3462a8f | IN FORCE |
+| Every value of a JSON answer is redacted before it is serialized | 4712138 to ac9572d | IN FORCE |
+| The migration: one markdown item becomes one JSON item with the rules for the holder, the links to other items and the history; the plan of a folder with its stops; `backlog team migrate` and its record | b0191d4 to 5bf19f5, 846bb4b to 336db5e | IN FORCE (rulings R4, R17 and R25); where the holder and the links go is ITEM DEFINITION, and what happens to a value whose field the definition does not declare is a QUESTION (already with the owner) |
+| User commands do not see items of a team; the reading commands see them with `--show-all` | ce68d33, 99e1d19, 947c300, 36a8042 | IN FORCE (ruling R3a with R16, decision 7) |
+| `backlog new --show-all`, to name an item of a team in a new item | 947c300 | ARCHIVED BEHAVIOUR (decision 7: not a flag of `backlog new`) |
+| `backlog history` and `backlog changes` name the team of an item with `--show-all`; what "held" means in `backlog changes` | 1cf9371, eeab766, ddd2615 | `backlog history`: ARCHIVED BEHAVIOUR (decision 15); `backlog changes`: OPEN COMMAND, and "held" is an ITEM DEFINITION field |
+| The skill teaches the team commands and no team's rules; it is compared with the command reference by a test | 041220f, 8a1bd63, 33bce1e | IN FORCE (decision 17) |
+| The behaviour scenarios of teams run on a shipped template and take their fields from the team file the scenario wrote | cd26816 to fddd3ce, b7df11f, 7a16f4e | IN FORCE as the way to test team behaviour |
+
+## Result
+
+All 335 commits were read by their record (the subject line of each); the code of each commit was not read. Nothing found on this branch conflicts with the pattern in a way that has no place: every coded workflow found (status order, verdicts, review, hand-off, holder, links between items, parent, completion time, views) becomes a field of an item definition or a rule of a rule set.
+
+Two points are QUESTION, both already recorded for the owner: whether two processes in one local copy take turns, and what happens to a value whose field the applicable definition does not declare.
+
+ARCHIVED BEHAVIOUR, documented here only: the aliases of earlier command names; `backlog team define` and `backlog team workflow`; editing a section by lines; `backlog history`; `backlog new --show-all`; old keys read forever; the bridge for the coded team workflow; a storage location that is never a default.
+
+OPEN COMMAND, kept by an earlier owner decision and neither specified nor removed: `backlog fields`, `backlog changes`, `backlog next`, `backlog done`, `backlog clean`, `backlog import`, `backlog archive done`, `backlog init clean`.

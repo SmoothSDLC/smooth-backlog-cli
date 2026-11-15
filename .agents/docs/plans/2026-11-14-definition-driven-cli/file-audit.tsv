@@ -95,15 +95,12 @@ KEEP	features/support/world.js	the scenario runner
 KEEP	package-lock.json	not about what commands do: licence, packaging, continuous integration
 KEEP	package.json	not about what commands do: licence, packaging, continuous integration
 MOVE-WITH-CODE	templates/workflows/team.json	the workflow definition of 2026-11-05, replaced by rule sets in the team file on 2026-11-09; src/shared/status.js still reads it, so it moves to the archive in the commit that removes that code
-NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/behaviour-spec.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/config.schema.json	describes the behaviour being built; listed in the backlog item
-NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/decisions.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/default-item-definition.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/default-redaction.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/default-team.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/file-audit.tsv	describes the behaviour being built; listed in the backlog item
-NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/history-analysis.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/index.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item-definition.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.example.json	describes the behaviour being built; listed in the backlog item
@@ -111,13 +108,10 @@ NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.schema.js
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/redaction-spec.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/redaction.example.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/redaction.schema.json	describes the behaviour being built; listed in the backlog item
-NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/superseded-decisions.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/team-file.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/team-rules-spec.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/team-rules.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/teams.example.json	describes the behaviour being built; listed in the backlog item
-NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/use-cases.md	describes the behaviour being built; listed in the backlog item
-NEW-BEHAVIOUR	.agents/docs/plans/2026-11-15-definition-driven-cli-implementation.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/README.md	describes the behaviour being built; listed in the backlog item
 REPLACE	templates/teams/extreme-programming.json	written in the rule form of 2026-11-09 (steps); replaced by teams.example.json and moved to the archive in plan task 12
 REPLACE	templates/teams/parallel.json	written in the rule form of 2026-11-09 (steps); replaced by teams.example.json and moved to the archive in plan task 12

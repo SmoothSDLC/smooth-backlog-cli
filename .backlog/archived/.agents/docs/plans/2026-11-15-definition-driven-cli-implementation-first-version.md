@@ -20,7 +20,7 @@
 - No status word, role word, review, claim, holder, dependency, parent, limit or hand-off in `src/` (decisions 28, 32, 53 to 59; guard test of S19).
 - User commands print text and take `--json`; team commands print JSON and take `--human` (decision 39). Every command that changes items takes `--whatif` (decision 2).
 - Every use case of a slice runs as a scenario in `features/` in both storage locations.
-- Commits as Cody (`cody@users.noreply.github.com`), no trailers; never a remote branch other than `simplify/pr3-review`; nothing of this work goes to the pr3 branch.
+- Commits with the repository's agent identity, no trailers; never a remote branch other than `simplify/pr3-review`; nothing of this work goes to the pr3 branch.
 
 ## Review Focus
 
@@ -32,7 +32,7 @@
 
 ## How each slice is run (sub-agent development)
 
-Each slice is one job that can be given to Cody on its own, after the slices it depends on are merged.
+Each slice is one job that can be given to one implementing session on its own, after the slices it depends on are merged.
 
 1. **Implementer** (one sub-agent, superpowers and ponytail skills, `/goal`): reads the specification files above and this slice; writes the slice's scenarios first (BDD), runs them and sees them fail; writes the unit tests named in the slice (TDD), runs them and sees them fail; implements the interfaces of the slice; runs the slice's tests, then `npm test`, `npm run check` and the private-details guard; runs its own code review and ponytail review and fixes what they find; commits on its own branch.
 2. **Spec reviewer** (a fresh sub-agent): checks every use case and interface of the slice against the specification; fails the slice on a gap.
@@ -74,7 +74,7 @@ The standard steps of a slice are therefore:
 | S18 | Help, `--whatif`, removed commands | S07 to S14 | B |
 | S19 | The coded workflow leaves the code | S13, S14, S17, S18 | |
 | S20 | Example teams, defaults and the examples guide | S12, S15 | |
-| S21 | The owner's team file in the topology repository | S20 | |
+| S21 | The owner's team file in the owner's private repository | S20 | |
 | S22 | Documentation | S18, S20 | |
 | S23 | Old scenarios and tests | S19 | |
 | S24 | Proof and branch-wide review | all | |
@@ -332,9 +332,9 @@ Slices with no dependency between them (for example S04, S06 and S12 after S01) 
 
 **Files:** Create `templates/teams.example.json`, `templates/default-team.json` (copies of the specification files), `docs/team-rules-guide.md` (each team's way of working in words, then each rule with the change it allows and the change it refuses). Move `templates/teams/*.json` to `.backlog/archived/`. Replace the third team of `teams.example.json` with the simplified, generic version of the owner's team file of S21 once S21 is done.
 
-### S21: The owner's team file in the topology repository
+### S21: The owner's team file in the owner's private repository
 
-**Spec:** behaviour-spec 6; decision 36. **Use cases:** G-TOPO-1. Done in the topology repository (private), never in the CLI repo: the actual rules and item definition of the Cody team, validated with `backlog validate`.
+**Spec:** behaviour-spec 6; decision 36. **Use cases:** G-TOPO-1. Done in the owner's private repository, never in this repository: the actual rules and item definition of the owner's team, validated with `backlog validate`.
 
 ### S22: Documentation
 

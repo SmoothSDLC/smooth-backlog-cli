@@ -6,7 +6,7 @@ What the CLI does is in [behaviour-spec.md](2026-11-14-definition-driven-cli/beh
 
 ## Remaining work on this branch
 
-The remaining work is the sliced implementation plan [2026-11-15-definition-driven-cli-implementation.md](2026-11-15-definition-driven-cli-implementation.md): 24 slices, each one job that can be given to Cody on its own, each naming the specification sections, use cases, files, interfaces and tests it implements and the slices it depends on. Nothing is built while a decision of section 8 of the specification is open for the slice that decision blocks (S05: A; S18: B; S17: C; S15 and S17: D); the owner's go in the chat starts the work (decision 63).
+The remaining work is the sliced implementation plan [2026-11-15-definition-driven-cli-implementation.md](2026-11-15-definition-driven-cli-implementation.md): 24 slices, each one job for one implementing session, each naming the specification sections, use cases, files, interfaces and tests it implements and the slices it depends on. Nothing is built while a decision of section 8 of the specification is open for the slice that decision blocks (S05: A; S18: B; S17: C; S15 and S17: D); the owner's go in the chat starts the work (decision 63).
 
 ## Decisions
 

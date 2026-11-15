@@ -13,7 +13,7 @@
 - **One slice, one session, one file.** A slice copies the requirements, scenarios, files, interfaces and tests it needs, so a session with a smaller coding model reads nothing else. A slice changes at most three source files beside its tests and feature file.
 - **Two sessions per slice.** Session 1 implements in at most 30 minutes, test first (scenarios, then unit tests, then code), refines with a code review and a ponytail pass, and writes a hand-off into the slice's backlog item. Session 2, a new session, reads the slice file and that hand-off only, and reviews in at most 15 minutes against the slice's scenarios, tests, interfaces, files and requirements, writing PASS or FAIL into the same item.
 - **Integration slices** (`I01` to `I07`) follow groups of slices that must work together: they run the joined scenarios and tests, fix only the seams, and are reviewed the same way.
-- **Order.** A slice starts only when every slice of "Depends on" is merged into `simplify/pr3-review`. A slice blocked by an open decision of section 8 of the specification starts only after the owner answers it and the slice is rewritten.
+- **Order.** A slice starts only when every slice of "Depends on" is merged into `simplify/pr3-review`. A slice that waits for an owner decision starts only after the owner answers it and the slice is rewritten; the decision is named in the slice's backlog item.
 - **Merging.** After a PASS, the lead merges the slice, runs the full proof (`npm test`, `npm run check`, the guard, scenarios in both locations), and runs a ponytail review of the merged result.
 
 ## Global constraints (every slice)
@@ -30,11 +30,11 @@
 2. Commands that only read evaluate no redaction rule and no team rule (S20, S33).
 3. `p0` is a priority, `0` and `012` numbers; `p`, `p-1`, `px` are refused (S14).
 4. Team command JSON keeps one shape for success and for refusal (S30).
-5. Two commands in one local copy at the same moment (S11, after decision A).
+5. Two commands in one local copy at the same moment (S11).
 
 ## Slices
 
-| Slice | Title | Kind | Depends on | Blocked by decision |
+| Slice | Title | Kind | Depends on | Waits for an owner decision |
 |---|---|---|---|---|
 | [S01](2026-11-15-definition-driven-cli-implementation/S01.md) | Runtime libraries and the schema files | build | - | - |
 | [S02](2026-11-15-definition-driven-cli-implementation/S02.md) | The flat item file | build | S01 | - |
@@ -47,7 +47,7 @@
 | [S08](2026-11-15-definition-driven-cli-implementation/S08.md) | Inputs from flags, named variables and the configuration | build | S07 | - |
 | [S09](2026-11-15-definition-driven-cli-implementation/S09.md) | The backlog location must be a git repository | build | S07 | - |
 | [S10](2026-11-15-definition-driven-cli-implementation/S10.md) | Commit only the CLI's files, push only its commits | build | S07, S09 | - |
-| [S11](2026-11-15-definition-driven-cli-implementation/S11.md) | Turn-taking of two commands in one local copy | build | S10 | A |
+| [S11](2026-11-15-definition-driven-cli-implementation/S11.md) | Turn-taking of two commands in one local copy | build | S10 | yes |
 | [I02](2026-11-15-definition-driven-cli-implementation/I02.md) | Integration: configuration, inputs, location and publication | integration | S07, S08, S09, S10 | - |
 | [S12](2026-11-15-definition-driven-cli-implementation/S12.md) | Redaction rules in force and text redaction | build | S01, S07 | - |
 | [S13](2026-11-15-definition-driven-cli-implementation/S13.md) | Redacting an item on every change | build | S12, S02 | - |
@@ -77,13 +77,13 @@
 | [S34](2026-11-15-definition-driven-cli-implementation/S34.md) | backlog team pop on the queue | build | S33 | - |
 | [I06](2026-11-15-definition-driven-cli-implementation/I06.md) | Integration: team commands on the rules engine | integration | S31, S32, S33, S34 | - |
 | [S35](2026-11-15-definition-driven-cli-implementation/S35.md) | backlog validate | build | S06, S13, S28 | - |
-| [S36](2026-11-15-definition-driven-cli-implementation/S36.md) | Validate: values in fields the definition does not declare | build | S35 | D |
+| [S36](2026-11-15-definition-driven-cli-implementation/S36.md) | Validate: values in fields the definition does not declare | build | S35 | yes |
 | [S37](2026-11-15-definition-driven-cli-implementation/S37.md) | backlog team validate | build | S35 | - |
 | [S38](2026-11-15-definition-driven-cli-implementation/S38.md) | backlog setup: configuration and skill | build | I02 | - |
 | [S39](2026-11-15-definition-driven-cli-implementation/S39.md) | backlog setup: examples and the version check | build | S38, S29 | - |
-| [S40](2026-11-15-definition-driven-cli-implementation/S40.md) | backlog upgrade of the backlog | build | S39 | C, D |
+| [S40](2026-11-15-definition-driven-cli-implementation/S40.md) | backlog upgrade of the backlog | build | S39 | yes |
 | [S41](2026-11-15-definition-driven-cli-implementation/S41.md) | Help, the removed commands and --whatif | build | I04, I06 | - |
-| [S42](2026-11-15-definition-driven-cli-implementation/S42.md) | The run recorder | build | S41 | B |
+| [S42](2026-11-15-definition-driven-cli-implementation/S42.md) | The run recorder | build | S41 | yes |
 | [S43](2026-11-15-definition-driven-cli-implementation/S43.md) | The coded team workflow leaves the code | build | I06 | - |
 | [S44](2026-11-15-definition-driven-cli-implementation/S44.md) | The shared checks and variables of the coded workflow leave the code | build | S43 | - |
 | [S45](2026-11-15-definition-driven-cli-implementation/S45.md) | Example teams in the package and the examples guide | build | S29, S37 | - |

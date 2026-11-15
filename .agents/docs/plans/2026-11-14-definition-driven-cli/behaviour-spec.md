@@ -1,8 +1,6 @@
 # Behaviour specification of the CLI
 
-The product requirements and the behaviour of the CLI. Section 9 holds every behaviour scenario; section 10 every constraint on the implementation. The team rules and redaction have their own specifications, [team-rules-spec.md](team-rules-spec.md) and [redaction-spec.md](redaction-spec.md). The implementation plan, [2026-11-15-definition-driven-cli-implementation.md](../2026-11-15-definition-driven-cli-implementation.md), names the sections and scenarios each slice builds.
-
-**This specification is incomplete until the four decisions of section 8 are taken.**
+The product requirements and the behaviour of the CLI. Section 8 holds every behaviour scenario; section 9 every constraint on the implementation. The team rules and redaction have their own specifications, [team-rules-spec.md](team-rules-spec.md) and [redaction-spec.md](redaction-spec.md). The implementation plan, [2026-11-15-definition-driven-cli-implementation.md](../2026-11-15-definition-driven-cli-implementation.md), names the sections and scenarios each slice builds.
 
 ## Contents
 
@@ -13,9 +11,8 @@ The product requirements and the behaviour of the CLI. Section 9 holds every beh
 5. [Commands](#5-commands): 5.1 user commands, 5.2 team commands, 5.3 commands and flags to remove from the code
 6. [The owner's team file](#6-the-owners-team-file)
 7. [Code to remove](#7-code-to-remove)
-8. [Open decisions that block this specification](#8-open-decisions-that-block-this-specification)
-9. [Behaviour scenarios](#9-behaviour-scenarios)
-10. [Constraints](#10-constraints)
+8. [Behaviour scenarios](#8-behaviour-scenarios)
+9. [Constraints](#9-constraints)
 
 ## 1. The pattern
 
@@ -169,7 +166,7 @@ Redaction rules are evaluated on every change, for every command that changes an
 
 ### 4.10 Two writers
 
-A change to an item that someone else changed since the caller last read it is refused with exit 5. Whether two commands running at the same moment in one local copy of the backlog take turns is open: section 8, decision A.
+A change to an item that someone else changed since the caller last read it is refused with exit 5.
 
 ### 4.11 Setup
 
@@ -185,7 +182,7 @@ A change to an item that someone else changed since the caller last read it is r
 
 ### 4.12 Upgrade
 
-`backlog upgrade` installs the latest release of the CLI (`check`, `auto`, `off`, `disable` and `<version>` control the update notice and the version), then converts every item of the repository's backlog to the running version and records `cli_version`. What it does with a value in a field the definition that applies does not declare is open: section 8, decision D. Whether `backlog team migrate` becomes part of it is open: section 8, decision C.
+`backlog upgrade` installs the latest release of the CLI (`check`, `auto`, `off`, `disable` and `<version>` control the update notice and the version), then converts every item of the repository's backlog to the running version and records `cli_version`.
 
 ### 4.13 Storage and local state
 
@@ -193,7 +190,7 @@ A change to an item that someone else changed since the caller last read it is r
 - **Files.** Open items are `phases/<slug>.json`; archived items are under the `archive_folder`. `index.json` holds the priority order (3.5). `numbers.json` holds `{"last": <n>}`, the highest number handed out.
 - **Next number.** One above the highest number the folder ever held: the item file names in the history of every branch of the backlog repository, every value `numbers.json` ever had, and the files and `numbers.json` present.
 - **Slug.** The number padded to three digits, a hyphen, and the title in lowercase with every run of other characters than letters and digits replaced by one hyphen, hyphens at the ends removed (`012-fix-the-login-page`); a title with no letter or digit gives `item`.
-- **Local state.** In the `.git` folder of the backlog repository's local copy, or in `.backlog/.state` when the items live inside the repository (never committed): the recovery journal, the record of what each agent last read, the per-user record of a valid team file (`smooth-backlog-cli/teams-validation/`), and the lock of section 8, decision A.
+- **Local state.** In the `.git` folder of the backlog repository's local copy, or in `.backlog/.state` when the items live inside the repository (never committed): the recovery journal, the record of what each agent last read, and the per-user record of a valid team file (`smooth-backlog-cli/teams-validation/`).
 - **Recovery journal.** Before a command writes several files, it writes their current content to the journal on disk. A command killed in the middle leaves the journal; the next command restores those files before it acts.
 - **What an agent last read.** A command that shows an item to an agent records the item's `updated`, `updated_by` and the backlog commit in `smooth-backlog-cli-views/<agent>.json`; a change by that agent is refused with exit 5 when the item changed since (4.10). An item the agent never read is written without the check.
 
@@ -245,7 +242,7 @@ Every team command takes `--team <name>`, `--agent <name>`, `--session <id>`, `-
 | `backlog team pop` | *`--whatif` | | |
 | `backlog team query` | | `plan` (what the queue offers each person), `rules` (the rule set) | `--show-all` on `rules` |
 | `backlog team validate` | `--show-all` | | |
-| `backlog team migrate` (section 8, decision C) | *`--whatif`, `--ask`, `--show-all` | | |
+| `backlog team migrate` | *`--whatif`, `--ask`, `--show-all` | | |
 
 ### 5.3 Commands and flags to remove from the code
 
@@ -262,24 +259,13 @@ The owner's team file, with the actual rules and item definition of the owner's 
 
 - The coded team workflow: `src/team/lifecycle.js`, `queue.js`, `team.js`, `workflow.js`, `wip.js`, `views.js`, `handoff.js`, `handoff-commands.js`.
 - The coded checks of user commands: `src/shared/dependencies.js`, `wip-limits.js`, `plain-step.js`, and the status words of `src/shared/status.js`.
-- The rule evaluator built on steps: `src/team/rules/expression.js`, `step.js`, `pop.js`, `safe-regex.js`, `validate-rules.js`, replaced by Ajv, json-logic-js and re2 (10).
+- The rule evaluator built on steps: `src/team/rules/expression.js`, `step.js`, `pop.js`, `safe-regex.js`, `validate-rules.js`, replaced by Ajv, json-logic-js and re2 (9).
 - The fixed field list of `src/shared/item-definition.js` and the `fields` object of `src/shared/item-json.js`.
 - The variables `SMOOTH_BACKLOG_CLI_REVIEW_STALE_SECONDS` and `SMOOTH_BACKLOG_CLI_RUN_LOCK_HELD`.
 - `templates/workflows/team.json` and the team templates of `templates/teams/`, replaced by `templates/teams.example.json`.
 - Every feature file and test of a removed behaviour.
 
-## 8. Open decisions that block this specification
-
-Each is presented to the owner with its options; until it is taken, the sections named are incomplete.
-
-| Decision | Sections it blocks |
-|---|---|
-| A. Whether two commands running at the same moment in one local copy of the backlog take turns (a lock file and the variable `SMOOTH_BACKLOG_CLI_LOCK_WAIT_MS`) | 4.10, 4.13 |
-| B. Whether the run recorder (the variable `SMOOTH_BACKLOG_CLI_RUN_HOOK`, which starts a program the user names on every command) stays | 4.7, 5 |
-| C. Whether `backlog team migrate` goes into `backlog upgrade` | 4.12, 5.2 |
-| D. What `backlog upgrade` and `backlog validate` do with a value in a field the definition that applies does not declare | 3.1, 4.5, 4.12 |
-
-## 9. Behaviour scenarios
+## 8. Behaviour scenarios
 
 Each scenario is one behaviour: the situation, the command as typed, and what must be true after. Ids are stable; each slice of the implementation plan names the scenarios it makes pass. `*` marks a scenario that needs new code; the others describe behaviour the code has and keeps. Every scenario runs in both storage places: the backlog inside the repository, and a separate backlog repository.
 
@@ -425,7 +411,7 @@ Each scenario is one behaviour: the situation, the command as typed, and what mu
 - *G-TOPO-1. The owner's team file in the owner's private repository passes `backlog validate` (6).
 
 
-## 10. Constraints
+## 9. Constraints
 
 Constraints on the implementation, each with its reason. Slices of the implementation plan cite them by id.
 

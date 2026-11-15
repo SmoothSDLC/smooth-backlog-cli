@@ -37,6 +37,28 @@ The owner's decisions that are in force for this branch, each in its current wor
 32. Review behaviour is a rule of a team: who reviews, how many rounds, the verdict words, when a review counts as stale and is offered again. Locking is a rule of a team: who may write an item and when, who holds it, how long, and when the hold lapses. None of it is code of the CLI, a status word in the code, or an environment variable of the CLI.
 33. Nothing leaves the scope because the lead read a rule that way. Every candidate removal of a behaviour, a flag, a command or an earlier decision is reported to the owner with its evidence, and stays in force until the owner decides (owner rule of 2026-11-05, restated 2026-11-08 and 2026-11-14).
 
+## Owner decisions of 2026-11-15
+
+34. An item is one flat JSON object: the number, the title, the description and every field of the item definition sit side by side. There is no `fields` sub-object. (The sub-object existed only because the code kept the properties it supplies apart from the definition's fields; a definition may still not declare a field with the name of a base property.)
+35. The example team file shipped with the CLI holds several teams: a simple team, an advanced team, and a simplified version of the owner's lead-and-reviewers workflow. Each shows its item definition and its rules. The specification shows these examples. In the public repository the third team carries a generic name and no internal tool, agent or model name (owner rule on public repositories).
+36. The owner's own team file, with the actual rules and item definition of the Cody team, is a requirement of this work and is written to the topology repository. It is not in the public repository.
+37. `backlog setup` installs or upgrades the backlog skill in every agent folder it detects in the repository (`.agents`, `.claude`, `.github`, `.qwen`), as the setup of the main branch does.
+38. Every user command that reads or changes items has a team form under `backlog team` that behaves the same way, with the team's rules applied: `backlog team new`, `list`, `show`, `update`, `archive`, `archive done`, `import`, `branch`, `branch import`. `backlog team update <item> <property> <value>` accepts the base properties and every field of the team's item definition, as `backlog update` does with the definition that applies to it; the team's rules apply to the fields or sets of fields they name.
+39. Team commands print JSON by default. `--human` prints a form for people, on every team command. Every team command has every flag that applies to it, `--whatif` included.
+40. The specification lists every command, including those waiting for a decision.
+41. Removed: `backlog next`, `backlog changes`, `backlog fields`, `backlog done`, `backlog move`, `backlog init clean`. Kept: `backlog import`, `backlog archive done`, `backlog branch`, `backlog branch import`.
+42. A new item is added at the bottom of the priority order of its branch.
+43. A priority is written with the prefix `p` (`p0`, `p1`, `p300`), so that a priority is never confused with an item number where either is referenced.
+44. The backlog location is always a git repository: the current repository, or a repository outside the current repository's folder. Every command that changes the backlog commits and pushes what it changed.
+45. The history is a required property of every item. Its structure is fixed in the CLI.
+46. `.backlog/config.json` has the key `redact_pii`, false by default, which turns on the redaction of personal and secret data in backlog items, and the redaction patterns of the repository (what to find and what to put in its place).
+47. The default status values of the CLI are those of decision 25 (new, active, closed); `pending` is not one of them.
+48. Every item carries the version of the CLI that last wrote it, as a required property. `backlog setup` checks the items that exist; when any was written by an older version it stops with an error saying that the backlog must first be upgraded with `backlog upgrade`, before setup installs the new skill.
+49. `backlog validate` checks what people write by hand: the team file (every team in it, with its rules and its item definition, the whole file at once), the user item definition, and the schema files. The team file and the user item definition are checked against the schema files; the schema files are checked against the published JSON Schema specification. Every item is checked against the definition that applies to it (every required field set) and, for an item of a team, against the team's rules.
+50. In the specification the commands are shown as a table: each command with the flags of the command itself, then each subcommand or property with the flags that apply to it.
+51. The specification has a table of contents. A section called "Schemas" holds every schema; if user and team schemas are separated, the sections say so in their names.
+52. Every concept the specification refers to is described in it. Anything defined in a schema, or executed or enforced by the CLI, that the specification does not describe is listed in a table until it is described.
+
 ## Owner rulings of 2026-11-09 that remain in force
 
 Reviewed one by one against the decisions above on 2026-11-14. Each keeps its number from the archived rulings file and is given in its current wording.

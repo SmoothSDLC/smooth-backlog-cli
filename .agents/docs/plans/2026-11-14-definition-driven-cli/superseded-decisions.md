@@ -29,3 +29,9 @@ Decisions that are no longer in force, with what replaced them. Nothing here des
 | 2026-11-05: a reviewer's verdict is complete or reject | 2026-11-05 | decision 32: the verdict words are a team's rule |
 | 2026-11-07, answer AM: item dependencies stay a feature of every item and every command | 2026-11-07 | decision 28 |
 | Lead decision of 2026-11-07: the first query is replaced by `list`, `show`, `history`, `changes`, `next` | 2026-11-07 | decision 15 for `history`; `changes` and `next` are open for the owner |
+| The defined fields of an item are held in a `fields` sub-object (item.schema.json of 2026-11-14) | 2026-11-14 | decision 34 |
+| Team commands print text and take `--json` | 2026-11-09 design | decision 39 |
+| `backlog next`, `changes`, `fields`, `done`, `move`, `init clean` kept by earlier decisions (2026-11-07 lead decision, 2026-11-05, 2026-11-07 rule) | 2026-11-05 to 2026-11-08 | decision 41 |
+| Only generic templates ship with the CLI and a full reference example of every behaviour (owner answers of 2026-11-08, round 2, and ruling R23) | 2026-11-08, 2026-11-09 | decision 35 adds the three example teams; the full reference example of every behaviour stays in force through decision 35 |
+| `backlog team migrate` and `backlog upgrade` as separate ways to bring a backlog up to date | 2026-11-09 | decision 48 makes `backlog upgrade` the way; see the specification |
+

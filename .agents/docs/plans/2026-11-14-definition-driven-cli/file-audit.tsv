@@ -102,13 +102,18 @@ KEEP	package.json	not about what commands do: licence, packaging, continuous int
 MOVE-WITH-CODE	templates/workflows/team.json	the workflow definition of 2026-11-05, replaced by rule sets in the team file on 2026-11-09; src/shared/status.js still reads it, so it moves to the archive in the commit that removes that code
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/behaviour-spec.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/config.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/decisions.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/default-item-definition.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/default-team.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/file-audit.tsv	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/history-analysis.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/index.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.example.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/item.schema.json	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/superseded-decisions.md	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/team-file.schema.json	describes the behaviour being built; listed in the backlog item
+NEW-BEHAVIOUR	.agents/docs/plans/2026-11-14-definition-driven-cli/use-cases.md	describes the behaviour being built; listed in the backlog item
 NEW-BEHAVIOUR	.agents/docs/plans/README.md	describes the behaviour being built; listed in the backlog item
 REWRITE	.agents/scripts/sync-commands-md.mjs	copies COMMANDS.md into the skill; follows the rewrite of COMMANDS.md
 REWRITE	AGENTS.md	stays in place by the owner's instruction; describes the earlier commands, flags and variables today

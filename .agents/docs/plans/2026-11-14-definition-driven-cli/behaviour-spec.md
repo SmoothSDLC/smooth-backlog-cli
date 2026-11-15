@@ -95,3 +95,52 @@ Checked on the branch head by running the commands in a scratch repository (2026
 | Setup and upgrade | `backlog setup` chooses the location and installs the skill; `backlog upgrade` and the update notice | kept (owner, 2026-11-07) |
 
 Coded today and removed from the code by decision 28, to become fields and rules in the default item definition and rule set: the checks on dependencies between items, the split of an item with its parent, a critical item going first, and the holder of an item.
+
+## The item definition
+
+An item definition declares the fields an item has beyond the base item. It is a JSON object: each key is a field name, each value says the field's `type` (text, number, boolean, time, person, item, items, list), and optionally its `default`, its allowed `values`, the values that are `final` (the item is finished; status only) and a `description`. A definition always declares `status`. A field may not take the name of a base property. The form is the `itemDefinition` part of [team-file.schema.json](team-file.schema.json).
+
+Which definition applies to an item: the `item` of its team in the team file; else the file named by `item_definition` in `.backlog/config.json`; else the definition packaged with the CLI, [default-item-definition.json](default-item-definition.json), which declares `status` alone with the values new, active and closed.
+
+What a command does with the definition:
+
+- `backlog new` gives every declared field its default.
+- `backlog update <item> <property> <value>` accepts as property the base words (`title`, `description`, `status`, `priority`) and every declared field. The value must have the field's type. A user command does not hold the value to the `values` list (owner principle of 2026-11-08: a user sets any status word on an item with no team).
+- A team command holds values to the type and the `values` list, and changes fields only through the effects of a rule.
+- `backlog list` and `backlog show` print the declared fields.
+
+## The team file and the rule set
+
+The team file holds one entry per team: `people` (each person with role words), `item` (the team's item definition) and `rules`. Its form is [team-file.schema.json](team-file.schema.json); [default-team.json](default-team.json) is the default team entry packaged with the CLI, and the templates in `templates/teams/` are further examples. The CLI only reads the team file.
+
+`rules.table` is an ordered list. Each rule has an `id`, a `step` (a step word, a list of them, or `*`), an optional condition `when`, and either `deny` (the text of a refusal) or `do` (effects). For a step, the rules are read in order and the first whose condition holds decides: a `deny` refuses with its text, a `do` is applied. A step no rule allows is refused.
+
+- Conditions: `all`, `any`, `not`, `is`, `in`, `empty`, `>=`, `<=`, `regex`, `contains`, `every`, `some`.
+- Functions: `count`, `length`, `plus`, `age`, `roles_of`, `text`.
+- Values: `$item` (the item's properties and fields), `$arg` (the arguments of the step, given as `--<name> <value>`), `$caller` (the agent and its roles), `$team` (its name and its items), `$session`, and `$it` inside `every`, `some` and `count`.
+- Effects: `set`, `add`, `remove` (fields), `note` (a note in the history), `related`, `place` (the place in the queue), `archive`, `delete`, `branch`, `team`, `say` (a line printed to the caller).
+
+`rules.pop` is the ordered list of steps `backlog team pop` tries for the caller. `rules.filters` are named conditions read with `backlog team query filter <name>`.
+
+Review, claiming, a holder, limits on work in progress, links between items, splitting, hand-off and who may write are all written this way, as fields and rules. The code of the CLI names none of them.
+
+## The configuration
+
+`.backlog/config.json`, at the root of the repository and committed in each branch, has the keys of [config.schema.json](config.schema.json): where the backlog lives (`backlog_repository`, `backlog_origin_url`, `push-backlog-updates`), the `user`, the `team`, the team file (`teams_file`, `teams_file_sha`), the repository's default item definition (`item_definition`), the `archive_folder`, the five keys that name environment variables (`repository_variable`, `branch_variable`, `team_variable`, `agent_variable`, `session_variable`) and the record of the migration. `backlog setup` writes it. A file that is not a JSON object stops every command with exit 2.
+
+## Exit codes
+
+0, the command succeeded (reading commands and `--whatif` too). 1, the command refused; one line says why (for a team command, the text of the rule). 2, the arguments or the place were wrong, or an item or the configuration cannot be read. 3, the backlog could not be synchronised and nothing stays changed; for `backlog team pop`, nothing is offered. 4, the backlog is not set up. 5, the item was changed by somebody else since the caller read it.
+
+## The commands and their use cases
+
+Every command above, with each of its uses and refusals, is written as a use case in [use-cases.md](use-cases.md). A command is built when its use cases run as scenarios in `features/` in both storage places.
+
+## Choices the lead made in writing this, for the owner to confirm or change
+
+1. The packaged default item definition declares `status` only (new, active, closed; closed is final). Every other field comes from a repository's or a team's definition.
+2. The packaged default team entry has the same definition and five rules (people only, new, start, close, archive).
+3. A user command checks that a property is declared and that the value has its type; it does not enforce the `values` list.
+4. The keys `item_definition` and `archive_folder` and the five variable keys of `.backlog/config.json`.
+5. The eight commands that are open with the owner stay in the code as they are until the owner decides; nothing in this specification depends on them.
+6. The turn-taking of two processes in one local copy stays in the code as it is until the owner decides.

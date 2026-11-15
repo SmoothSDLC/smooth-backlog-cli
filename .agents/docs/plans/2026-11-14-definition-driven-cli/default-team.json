@@ -1,0 +1,25 @@
+{
+  "default": {
+    "people": {
+      "agent-1": ["member"]
+    },
+    "item": {
+      "status": {"type": "text", "default": "new", "values": ["new", "active", "closed"], "final": ["closed"], "description": "Where the item is."}
+    },
+    "rules": {
+      "table": [
+        {"id": "members-only", "step": "*", "when": {"empty": "$caller.roles"}, "deny": "{$caller} is not a person of team {$team.name}"},
+        {"id": "new", "step": "new", "do": {"set": {"status": "new"}}},
+        {"id": "start", "step": "start", "when": {"is": ["$item.status", "new"]}, "do": {"set": {"status": "active"}}},
+        {"id": "close", "step": "close", "when": {"is": ["$item.status", "active"]}, "do": {"set": {"status": "closed"}}},
+        {"id": "archive", "step": "archive", "when": {"is": ["$item.status", "closed"]}, "do": {"archive": true}}
+      ],
+      "pop": [
+        {"id": "next-item", "step": "start"}
+      ],
+      "filters": {
+        "active": {"description": "The items being worked on.", "when": {"is": ["$item.status", "active"]}}
+      }
+    }
+  }
+}

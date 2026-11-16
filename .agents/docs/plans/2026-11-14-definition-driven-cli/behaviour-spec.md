@@ -7,7 +7,7 @@ The product requirements and the behaviour of the CLI. Section 8 holds every beh
 1. [The pattern](#1-the-pattern)
 2. [Terms](#2-terms)
 3. [Schemas](#3-schemas): 3.1 the base item, 3.2 the item definition, 3.3 the team file and the rule set, 3.4 the configuration, 3.5 the index, 3.6 the example team file, 3.7 the packaged defaults (the team rules and redaction schemas are specified in [team-rules-spec.md](team-rules-spec.md) and [redaction-spec.md](redaction-spec.md))
-4. [Behaviour](#4-behaviour): 4.1 the backlog location, 4.2 numbers, slugs and priority, 4.3 the definition that applies, 4.4 history, 4.5 validation, 4.6 how a team command applies the rules, 4.7 inputs and environment variables, 4.8 output and exit codes, 4.9 redaction, 4.10 two writers, 4.11 setup, 4.12 upgrade, 4.13 storage and local state, 4.14 other behaviour, 4.15 the version check
+4. [Behaviour](#4-behaviour): 4.1 the backlog location, 4.2 numbers, slugs and priority, 4.3 the definition that applies, 4.4 history, 4.5 validation, 4.6 how a team command applies the rules, 4.7 inputs and environment variables, 4.8 output and failure messages, 4.9 redaction, 4.10 two writers, 4.11 setup, 4.12 upgrade, 4.13 storage and local state, 4.14 other behaviour, 4.15 the version check, 4.16 the failures of each command
 5. [Commands](#5-commands): 5.1 user commands, 5.2 team commands, 5.3 commands and flags to remove from the code
 6. [The owner's team file](#6-the-owners-team-file)
 7. [Code to remove](#7-code-to-remove)
@@ -214,6 +214,42 @@ A command stopped at step 2 or refused at step 4 has lost: it reverts its files 
 ### 4.15 The version check
 
 Every command except `backlog`, `--help` and `backlog upgrade` first compares the `cli_version` of the items of the repository's backlog with the running CLI. When any item is of an older version, the command does nothing else and fails with a message naming the number of older items and `backlog upgrade`.
+
+### 4.16 The failures of each command
+
+Every failure below prints its three parts (4.8): **what** names the command, the item or property and the value concerned; **why** names the rule broken; **fix** names the command or change that resolves it. The command changes nothing (C-47).
+
+**Failures of every command that reads the backlog** (all but `backlog` and `--help`):
+
+| Failure | Why | What to do |
+|---|---|---|
+| The backlog location is not set up or is not a git repository | 4.1, 4.11 | run `backlog setup` |
+| An item is of an older version | 4.15 | run `backlog upgrade` |
+| An item cannot be read | 4.14 | `backlog update <item> <property> <value>`, `backlog update <item> restore`, or `backlog update <slug> seq <n>` |
+| The configuration does not fit its schema | 3.4 | correct the named key of `.backlog/config.json` |
+| A command, subcommand, flag or property that does not exist (removed ones included) | 5.3 | `backlog --help` |
+| `--ask` without a terminal | 4.14 | the flags that give the values |
+
+**Failures of every command that changes the backlog:** another agent changed the item since this agent read it (4.10; fix: read the item and repeat the command); the remote changed between the pull and the push (4.10; fix: repeat the command); a redaction rule is not valid (redaction-spec.md; fix: `backlog validate` and correct the named rule).
+
+**Failures of every team command:** git older than 2.40 (4.14; names both versions); `--team` or `--agent` missing with no variable set (4.7; names the flag and the variable); the team is not in the team file, or the team file does not fit its schema (3.3; names the team or the place); a refusal by the team's rules lists every failing rule with its property and error (4.6, 4.8).
+
+**Failures of one command:**
+
+| Command | Failure | Why | What to do |
+|---|---|---|---|
+| `backlog setup` | not inside a git repository; the backlog repository cannot be reached | 4.11 | run it inside a repository; check `backlog_origin_url` |
+| `backlog new`, `backlog team new` | no title; a property the definition does not declare; a value that does not fit its field type; `--file` that does not fit 3.1 | 3.1, 3.2, 4.3 | give the title; use a declared property; give a value of the field type; correct the named property of the file |
+| `backlog update <item>`, `backlog team update <item>` | no such item; undeclared property; value of the wrong type; a priority other than `p<N>`; `restore` with no earlier version; `seq` on an item whose number can be read; a number already used | 4.2, 4.3, 4.14 | `backlog list`; the declared properties; the field type; `p0`, `p1`, ...; `backlog show <item>`; a free number |
+| `backlog show <item>`, `backlog team show <item>` | no such item | 4.2 | `backlog list` |
+| `backlog list branch <name>`, `backlog team list branch <name>` | no such branch | 5.1 | the branches of the repository |
+| `backlog team list --filter <name>` | the team has no filter of that name | team-rules-spec.md | `backlog team query rules` |
+| `backlog archive <item>`, `backlog team archive <item>` | no such item; the item is already archived | 4.13 | `backlog list` |
+| `backlog import <branch>`, `backlog branch import <branch>` and their team forms | no such branch; with `--repository`, no such repository or it has no backlog; an imported item that does not fit the definition that applies here | 4.14 | the branch or repository name; correct the named item and property in the source |
+| `backlog validate`, `backlog team validate` | any finding; each finding names the item, rule or place | 4.5 | correct each finding |
+| `backlog upgrade` | the release cannot be reached; an unknown `<version>`; an item with no conversion or that does not fit after conversion | 4.12 | try again later; a released version; update the listed items by hand to `item.schema.json` and the item definition that applies |
+| `backlog team pop` | the team has no queue | team-rules-spec.md | define the queue in the team file |
+| `backlog team query` | a subcommand other than `plan` or `rules` | 5.2 | `backlog team query --help` |
 
 ## 5. Commands
 
@@ -500,7 +536,7 @@ Constraints on the implementation, each with its reason. Tasks of the implementa
 
 ### Implementation plan
 
-- **C-44.** The implementation plan points every task to the sections, scenarios and constraints it implements.
+- **C-44.** The implementation plan points every task to the sections, scenarios and constraints it implements, names the tasks it depends on, the documents it reads and the skills it loads, and states the hand-off it writes into its own backlog item; a task file is copied unchanged into that backlog item.
 - **C-45.** A task is run by one session of a smaller coding model with the task file alone: implementation in at most 30 minutes, test first, refined by a code review and a ponytail pass; a review in at most 15 minutes in a new session that reads only the task and the hand-off written into the task's own backlog item; an integration task wherever tasks must work together.
 
 ### Behaviour of every command
@@ -510,3 +546,5 @@ Constraints on the implementation, each with its reason. Tasks of the implementa
 - **C-48.** Concurrency is decided by git and the per-agent record of the last read: pull first, check the record, commit only the CLI's files, push without force; the first push wins and the loser reverts and fails; no lock, no wait, no automatic retry.
 - **C-49.** The CLI starts no other program and has no hooks.
 - **C-50.** Every command but `backlog`, `--help` and `backlog upgrade` fails while any item is of an older version; `backlog upgrade` converts per version and names the schema files when an item must be updated by hand.
+- **C-51.** Each command has a task that makes every failure of 4.16 for that command print its three parts, and one integration task checks every failure of every command in text and in JSON.
+- **C-52.** Each command has a permutation test: every combination of its subcommands and flags (5.1, 5.2) is run in both storage locations, each with its expected success or failure message.

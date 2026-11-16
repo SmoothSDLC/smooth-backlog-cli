@@ -3,10 +3,60 @@
 | | |
 |---|---|
 | Kind | integration |
-| Depends on | TASK-52, TASK-51, TASK-46, TASK-44, TASK-38, TASK-25, TASK-42 (each merged into `simplify/pr3-review` before this starts) |
+| Depends on | TASK-52, TASK-51, TASK-46, TASK-44, TASK-38, TASK-25, TASK-42, INT-08, PERM-01, PERM-02, PERM-03, PERM-04, PERM-05, PERM-06, PERM-07, PERM-08, PERM-09, PERM-10, PERM-11, PERM-12, PERM-13, PERM-14, PERM-15, PERM-16, PERM-17, PERM-18, PERM-19, PERM-20, PERM-21, PERM-22 (each merged into `simplify/pr3-review` before this starts) |
 | Needed by | nothing |
 | Time box | implementation at most 30 minutes; review at most 15 minutes |
 | Specification | [behaviour-spec.md](../2026-11-14-definition-driven-cli/behaviour-spec.md), [team-rules-spec.md](../2026-11-14-definition-driven-cli/team-rules-spec.md), [redaction-spec.md](../2026-11-14-definition-driven-cli/redaction-spec.md); the parts this task needs are copied below |
+
+## Backlog item
+
+This task is backlog item 209 of this repository's backlog, branch `simplify/pr3-review`. This file is copied unchanged into that item; both sessions record their hand-off and verdict in its Handoff section.
+
+## Depends on
+
+- TASK-52 (backlog item 208): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- TASK-51 (backlog item 207): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- TASK-46 (backlog item 202): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- TASK-44 (backlog item 214): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- TASK-38 (backlog item 196): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- TASK-25 (backlog item 212): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- TASK-42 (backlog item 213): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- INT-08 (backlog item 259): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-01 (backlog item 237): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-02 (backlog item 238): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-03 (backlog item 239): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-04 (backlog item 240): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-05 (backlog item 241): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-06 (backlog item 242): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-07 (backlog item 243): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-08 (backlog item 244): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-09 (backlog item 245): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-10 (backlog item 246): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-11 (backlog item 247): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-12 (backlog item 248): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-13 (backlog item 249): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-14 (backlog item 250): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-15 (backlog item 251): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-16 (backlog item 252): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-17 (backlog item 253): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-18 (backlog item 254): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-19 (backlog item 255): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-20 (backlog item 256): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-21 (backlog item 257): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+- PERM-22 (backlog item 258): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+
+## Required reads (before any work, in this order)
+
+1. `AGENTS.md` of the repository.
+2. This task in its backlog item, with every line already in its Handoff section.
+3. The hand-off of each task of "Depends on", in its backlog item.
+4. The sections below; the specification text they need is copied into "Requirements". Open [behaviour-spec.md](../2026-11-14-definition-driven-cli/behaviour-spec.md) or the other specification files only for a section this task names.
+5. Every file of "Files" that already exists.
+
+## Skills (load by installed name)
+
+- Session 1: `backlog`, `test-driven-development`, `verification-before-completion`, `systematic-debugging` (only when a test fails for a reason you do not understand), `requesting-code-review`, `ponytail`.
+- Session 2: `backlog`, `requesting-code-review`, `ponytail-review`, `verification-before-completion`.
 
 ## Requirements (copied from the specification)
 
@@ -181,8 +231,8 @@ None of its own.
 
 This task joins tasks that were built and reviewed on their own. Work only from this file.
 
-1. Load the skills: `verification-before-completion`, `systematic-debugging`, `requesting-code-review`, `ponytail`.
-2. `git fetch` and `git switch -c task/INT-07 origin/simplify/pr3-review` (the tasks of "Depends on" are merged there).
+1. Load the skills of "Skills", session 1, and do the reads of "Required reads".
+2. `git fetch`, then `git worktree add .worktrees/INT-07 -b task/INT-07 origin/simplify/pr3-review` (the tasks of "Depends on" are merged there); work only inside `.worktrees/INT-07`.
 3. Run every scenario and test of "Checks". For each failure, find where two tasks disagree (a name, a shape, an order) with `systematic-debugging`, and fix it at that seam only; never rewrite a task.
 4. Write any scenario of "Scenarios" that no task wrote yet.
 5. Run `npm test`, `npm run check` and the guard; then `requesting-code-review` and `ponytail` over the seams changed; commit `INT-07: Integration: the whole branch`.
@@ -190,5 +240,5 @@ This task joins tasks that were built and reviewed on their own. Work only from 
 
 ## Session 2: review the integration (at most 15 minutes, a new session)
 
-1. Load `requesting-code-review`, `ponytail-review`, `verification-before-completion`.
-2. Run every check of "Checks"; review only the seam changes; write `REVIEW INT-07 | verdict: PASS or FAIL` with findings into the backlog item.
+1. Load the skills of "Skills", session 2, and do the reads of "Required reads" (the hand-off of session 1 included).
+2. In `.worktrees/INT-07`, run every check of "Checks"; review only the seam changes; write `REVIEW INT-07 | verdict: PASS or FAIL` with findings into the backlog item.

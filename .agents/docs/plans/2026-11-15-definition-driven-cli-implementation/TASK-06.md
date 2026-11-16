@@ -8,6 +8,27 @@
 | Time box | implementation at most 30 minutes; review at most 15 minutes |
 | Specification | [behaviour-spec.md](../2026-11-14-definition-driven-cli/behaviour-spec.md), [team-rules-spec.md](../2026-11-14-definition-driven-cli/team-rules-spec.md), [redaction-spec.md](../2026-11-14-definition-driven-cli/redaction-spec.md); the parts this task needs are copied below |
 
+## Backlog item
+
+This task is backlog item 161 of this repository's backlog, branch `simplify/pr3-review`. This file is copied unchanged into that item; both sessions record their hand-off and verdict in its Handoff section.
+
+## Depends on
+
+- TASK-05 (backlog item 160): merged into `simplify/pr3-review`; read its hand-off in its backlog item.
+
+## Required reads (before any work, in this order)
+
+1. `AGENTS.md` of the repository.
+2. This task in its backlog item, with every line already in its Handoff section.
+3. The hand-off of each task of "Depends on", in its backlog item.
+4. The sections below; the specification text they need is copied into "Requirements". Open [behaviour-spec.md](../2026-11-14-definition-driven-cli/behaviour-spec.md) or the other specification files only for a section this task names.
+5. Every file of "Files" that already exists.
+
+## Skills (load by installed name)
+
+- Session 1: `backlog`, `test-driven-development`, `verification-before-completion`, `systematic-debugging` (only when a test fails for a reason you do not understand), `requesting-code-review`, `ponytail`.
+- Session 2: `backlog`, `requesting-code-review`, `ponytail-review`, `verification-before-completion`.
+
 ## Requirements (copied from the specification)
 
 ### 4.3 The definition that applies
@@ -41,8 +62,8 @@ None of its own.
 
 Work only from this file. Do not read the whole specification; everything this task needs is above.
 
-1. Load the skills by their installed names: `test-driven-development`, `verification-before-completion`, `systematic-debugging` (only when a test fails for a reason you do not understand), `requesting-code-review`, `ponytail`.
-2. Create a local branch from the head of `simplify/pr3-review`: `git switch -c task/TASK-06 origin/simplify/pr3-review` (after `git fetch`). Do not push.
+1. Load the skills of "Skills", session 1, by their installed names, and do the reads of "Required reads".
+2. After `git fetch`, create the task's own worktree and branch from the head of `simplify/pr3-review`: `git worktree add .worktrees/TASK-06 -b task/TASK-06 origin/simplify/pr3-review`, and work only inside `.worktrees/TASK-06` (other sessions share the main working copy; never switch its branch). Do not push.
 3. **Scenarios first (BDD).** This task has no scenario of its own; go to step 4.
 4. **Unit tests (TDD).** Write each test of "Unit tests" in the named test file. Run `node --test <that file>`; every new test must fail for the reason the test states. Commit the failing tests: `git commit -m "TASK-06: failing tests"`.
 5. **Code.** Write the smallest code that makes the tests and scenarios pass, in the files of "Files" only. An existing test that asserts the old behaviour this task replaces is updated in the same commit and named in the hand-off; no other file outside "Files" changes. Follow the interfaces exactly (names, parameters, return shapes). Use the libraries named; never hand-build what a library does.
@@ -69,8 +90,8 @@ Open: <anything left, with the reason>
 
 A new session reads only this file and the hand-off in the task's backlog item.
 
-1. Load the skills: `requesting-code-review` (its reviewer checklist), `ponytail-review`, `verification-before-completion`.
-2. `git switch task/TASK-06`; run the task's test file, `npm test`, `npm run check` and the guard. Any failure: verdict FAIL.
+1. Load the skills of "Skills", session 2, and do the reads of "Required reads" (the hand-off of session 1 included).
+2. Work in `.worktrees/TASK-06` (the implementer's worktree of branch `task/TASK-06`); run the task's test file, `npm test`, `npm run check` and the guard. Any failure: verdict FAIL.
 3. Check, one by one, and write each result:
    - every scenario id of "Scenarios" exists in the named feature file and passes;
    - every test of "Unit tests" exists with that name, asserts what the line says, and passes;

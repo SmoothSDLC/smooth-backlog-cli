@@ -39,7 +39,7 @@ Reading commands (`list`, `show`, `query`) make no change and trigger nothing. A
 
 1. **Structure.** `next` must fit the item schema and the team item definition: every required property set, every value of its field's type, a value of a field with `values` one of them. Failures are returned like rule errors.
 2. **Rules.** For every rule: if `when` is absent or true, `require` must be true; if it is false, the rule fails. Every rule is evaluated, also after a failure.
-3. **Result.** No failure: `next` is written as one change of the item, with one history entry (command, caller, every changed property with before and after). Any failure: nothing is written, exit 1, every failing rule's error is returned (10).
+3. **Result.** No failure: `next` is written as one change of the item, with one history entry (command, caller, every changed property with before and after). Any failure: nothing is written and the command fails with every failing rule's error (10).
 
 Rules have no order and no hierarchy: each is true or false of the same change, and all must be true, so the order of reading cannot change the result. `--whatif` evaluates and writes nothing.
 
@@ -162,13 +162,13 @@ Rules refuse; they do not list permitted moves. To allow only some moves, one ru
 
 ## 9. The queue (`backlog team pop`) and filters
 
-`queue` is an ordered list of entries: `roles` (role words it is for; absent: everyone), `match` (a condition on an open item of the team, read with `var` as the item's properties and `outer` for the context) and optionally `take` (properties and values). `backlog team pop` takes the first entry whose `roles` include one of the caller's and has a matching item; the first such item in priority order is offered. With `take`, pop makes the change of those values (2) and every rule applies; a refused item is skipped for the next; nothing left: idle, exit 3. A value of `take` may be the literal `"$caller"`, the caller's name.
+`queue` is an ordered list of entries: `roles` (role words it is for; absent: everyone), `match` (a condition on an open item of the team, read with `var` as the item's properties and `outer` for the context) and optionally `take` (properties and values). `backlog team pop` takes the first entry whose `roles` include one of the caller's and has a matching item; the first such item in priority order is offered. With `take`, pop makes the change of those values (2) and every rule applies; a refused item is skipped for the next; nothing left: the answer says there is nothing to take now. A value of `take` may be the literal `"$caller"`, the caller's name.
 
 `filters` are named conditions on an item, each with a `description`, read with `backlog team list --filter <name>`.
 
 ## 10. Error texts
 
-`error` is the text the caller sees. Values may be put in with `{...}` and a path of 5: `{prev.status}`, `{next.estimate}`, `{caller.name}`; a path that cannot be read gives an empty text. A refusal returns every failing rule: in JSON (the default of team commands) `{"refused": [{"rule": "<id or place>", "error": "..."}]}`; with `--human`, one line per failing rule. Exit 1.
+`error` is the text the caller sees. Values may be put in with `{...}` and a path of 5: `{prev.status}`, `{next.estimate}`, `{caller.name}`; a path that cannot be read gives an empty text. A refusal returns every failing rule, with the property it concerns, and what to do: in JSON (the default of team commands) `{"refused": [{"rule": "<id or place>", "property": "<property>", "error": "..."}], "fix": "change the properties named and run the command again"}`; with `--human`, one line per failing rule followed by what to do. A rule's `error` says why the change is refused and, where it can, what would make it allowed.
 
 ## 11. Validation of the rules
 

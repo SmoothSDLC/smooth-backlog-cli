@@ -85,7 +85,8 @@
             "person",
             "item",
             "items",
-            "list"
+            "list",
+            "any"
           ]
         },
         "default": {},

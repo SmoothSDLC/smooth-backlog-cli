@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/SmoothSDLC/smooth-backlog-cli/item-definition.schema.json",
   "title": "Item definition",
-  "description": "The fields of an item beyond the base properties. The same form is the item of a team in the team file, a repository's default definition named by item_definition in .backlog/config.json, and the definition packaged with the CLI.",
+  "description": "The fields of an item beyond the base properties. The same form is the item of a team in the team file, a repository's default definition named by item_definition in .backlog/config.json, and the definition packaged with the CLI. A field of type any has no type and no restricted values; a property that is neither a base property nor declared does not exist.",
   "type": "object",
   "required": [
     "status"
@@ -45,7 +45,8 @@
             "person",
             "item",
             "items",
-            "list"
+            "list",
+            "any"
           ]
         },
         "default": {},
